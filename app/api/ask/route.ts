@@ -150,7 +150,10 @@ export async function POST(req: Request) {
         if (!conversationId) {
             const { data: newConvo, error: nErr } = await supabaseAdmin
                 .from("conversations")
-                .insert({ user_id: auth.user.id })
+                .insert({
+                    user_id: auth.user.id,
+                    title: question.slice(0, 60)
+                })
                 .select("id")
                 .single();
 
@@ -357,7 +360,11 @@ export async function POST(req: Request) {
         }
 
         // Strict: quotes only + citations (book title/id)
-        return Response.json({ conversationId, passages });
+        return Response.json({
+            conversationId,
+            conversationTitle: ordered.length > 0 ? question.slice(0, 60) : null,
+            passages
+        });
     } catch (err: any) {
         console.error("Ask error:", err);
         return Response.json({ error: err?.message ?? "Unexpected server error" }, { status: 500 });

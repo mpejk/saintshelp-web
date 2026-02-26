@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useRouter } from "next/navigation";
 
@@ -11,8 +11,9 @@ type Profile = {
 };
 
 export default function AppHome() {
-    const supabase = supabaseBrowser();
+    const supabase = useMemo(() => supabaseBrowser(), []);
     const router = useRouter();
+
     const [profile, setProfile] = useState<Profile | null>(null);
     const [err, setErr] = useState<string>("");
 
@@ -36,46 +37,92 @@ export default function AppHome() {
         })();
     }, [router, supabase]);
 
-    async function signOut() {
-        await supabase.auth.signOut();
-        router.push("/login");
-    }
+    if (err) return <div style={{ padding: 18 }}>Error: {err}</div>;
+    if (!profile) return <div style={{ padding: 18 }}>Loading...</div>;
 
-    if (err) return <main style={{ padding: 16 }}>Error: {err}</main>;
-    if (!profile) return <main style={{ padding: 16 }}>Loading...</main>;
+    const approved = profile.status === "approved";
+
+    const styles = {
+        wrap: { padding: 18 } as const,
+        h1: { margin: 0, fontSize: 20, letterSpacing: -0.2 } as const,
+        muted: { margin: "8px 0 0 0", fontSize: 13, opacity: 0.75 } as const,
+        pill: {
+            display: "inline-flex",
+            gap: 8,
+            alignItems: "center",
+            padding: "6px 10px",
+            borderRadius: 999,
+            border: "1px solid #efefef",
+            background: "#fafafa",
+            fontSize: 12,
+            marginTop: 12,
+        } as const,
+        grid: {
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 12,
+            marginTop: 16,
+        } as const,
+        card: {
+            border: "1px solid #efefef",
+            borderRadius: 12,
+            padding: 14,
+            background: "#fafafa",
+        } as const,
+        cardTitle: { margin: 0, fontSize: 14, fontWeight: 650 } as const,
+        cardDesc: { margin: "6px 0 10px 0", fontSize: 13, opacity: 0.8, lineHeight: 1.35 } as const,
+        btnPrimary: {
+            border: "1px solid #111",
+            background: "#111",
+            color: "#fff",
+            borderRadius: 10,
+            padding: "8px 12px",
+            fontSize: 13,
+            cursor: "pointer",
+        } as const,
+        note: { marginTop: 14, fontSize: 13, opacity: 0.85 } as const,
+    };
 
     return (
-        <main style={{ maxWidth: 720, margin: "40px auto", padding: 16 }}>
-            <h1>SaintsHelp</h1>
-            <p>Signed in as: {profile.email}</p>
-            <p>
-                Status: <b>{profile.status}</b>
+        <div style={styles.wrap}>
+            <h1 style={styles.h1}>Account</h1>
+            <p style={styles.muted}>
+                Signed in as <b>{profile.email ?? "(unknown)"}</b>
             </p>
 
-            {profile.status === "pending" && <p>Your account is pending approval.</p>}
-            {profile.status === "blocked" && <p>Your account is blocked.</p>}
-
-            {profile.status === "approved" && (
-                <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-                    <button onClick={() => router.push("/app/books")}>
-                        Manage Books
-                    </button>
-
-                    <button onClick={() => router.push("/app/ask")}>
-                        Ask SaintsHelp
-                    </button>
-                </div>
-            )}
-
-            {profile.is_admin && (
-                <div style={{ marginTop: 16 }}>
-                    <button onClick={() => router.push("/admin")}>Admin</button>
-                </div>
-            )}
-
-            <div style={{ marginTop: 24 }}>
-                <button onClick={signOut}>Sign out</button>
+            <div style={styles.pill}>
+                Status: <b style={{ textTransform: "capitalize" }}>{profile.status}</b>
             </div>
-        </main>
+
+            {profile.status === "pending" && (
+                <p style={styles.note}>
+                    Your account is pending approval. Once approved, you can upload books and ask questions.
+                </p>
+            )}
+
+            {profile.status === "blocked" && (
+                <p style={styles.note}>Your account is blocked. Contact an admin if this is a mistake.</p>
+            )}
+
+            {approved && (
+                <div style={styles.grid}>
+                    <div style={styles.card}>
+                        <p style={styles.cardTitle}>Manage books</p>
+                        <p style={styles.cardDesc}>Upload PDFs, delete books, and manage your library.</p>
+                        <button style={styles.btnPrimary} onClick={() => router.push("/app/books")}>
+                            Open Books
+                        </button>
+                    </div>
+
+                    <div style={styles.card}>
+                        <p style={styles.cardTitle}>Ask SaintsHelp</p>
+                        <p style={styles.cardDesc}>Ask questions and receive verbatim quotations only.</p>
+                        <button style={styles.btnPrimary} onClick={() => router.push("/app/ask")}>
+                            Open Ask
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
