@@ -118,14 +118,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     onClick={() => router.push("/app")}
                     role="button"
                 >
-                    <img src="/saintshelp-logo.svg" alt="SaintsHelp" style={{ width: 22, height: 22 }} />
                     <div style={styles.brand}>SaintsHelp</div>
                 </div>
 
                 <div style={styles.nav}>
-                    <button style={styles.btnGhost} onClick={() => router.back()}>
-                        Back
-                    </button>
 
                     <button style={linkStyle("/app")} onClick={() => router.push("/app")}>
                         Home

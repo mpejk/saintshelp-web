@@ -63,7 +63,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             alignItems: "center",
             marginBottom: 16,
         } as const,
-        brand: { fontSize: 18, fontWeight: 650, letterSpacing: -0.2 } as const,
         nav: { display: "flex", gap: 8, alignItems: "center" } as const,
         btn: {
             border: "1px solid #d9d9d9",
@@ -82,22 +81,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             fontSize: 13,
             cursor: "pointer",
         } as const,
-        btnGhost: {
-            border: "1px solid transparent",
-            background: "transparent",
-            borderRadius: 10,
-            padding: "8px 10px",
-            fontSize: 13,
-            cursor: "pointer",
-            opacity: 0.85,
-        } as const,
         content: {
             border: "1px solid #e7e7e7",
             borderRadius: 12,
             background: "#fff",
         } as const,
-        headerRight: { display: "flex", gap: 10, alignItems: "center" } as const,
         meta: { fontSize: 12, opacity: 0.75 } as const,
+        logoWrap: {
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            cursor: "pointer",
+            userSelect: "none",
+        } as const,
+        logoImg: {
+            height: 34,
+            width: "auto",
+            display: "block",
+        } as const,
     };
 
     const linkStyle = (href: string) => {
@@ -105,25 +106,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         return isActive ? styles.btnActive : styles.btn;
     };
 
+    if (loading) {
+        return <main style={styles.page}>Loading…</main>;
+    }
+
     return (
         <main style={styles.page}>
             <div style={styles.topbar}>
-                <div
-                    style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
-                    onClick={() => router.push("/app")}
-                    role="button"
-                >
-                    <img src="/saintshelp-logo.svg" alt="SaintsHelp" style={{ width: 22, height: 22 }} />
-                    <div style={styles.brand}>SaintsHelp</div>
+                <div style={styles.logoWrap} onClick={() => router.push("/app")} role="button">
+                    <img src="/logo.svg" alt="SaintsHelp" style={styles.logoImg} />
                 </div>
 
                 <div style={styles.nav}>
                     {approved ? (
                         <>
-                            <button style={styles.btnGhost} onClick={() => router.back()}>
-                                Back
-                            </button>
-
                             <button style={linkStyle("/app")} onClick={() => router.push("/app")}>
                                 Home
                             </button>
@@ -137,7 +133,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             </button>
 
                             {isAdmin && (
-                                <button style={styles.btn} onClick={() => router.push("/admin")}>
+                                <button style={linkStyle("/admin")} onClick={() => router.push("/admin")}>
                                     Admin
                                 </button>
                             )}
@@ -145,6 +141,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             <button style={styles.btn} onClick={signOut}>
                                 Sign out
                             </button>
+
+                            {profile?.email && <div style={styles.meta}>{profile.email}</div>}
                         </>
                     ) : (
                         <>
@@ -155,6 +153,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                             <button style={styles.btn} onClick={signOut}>
                                 Sign out
                             </button>
+
+                            {profile?.email && <div style={styles.meta}>{profile.email}</div>}
                         </>
                     )}
                 </div>

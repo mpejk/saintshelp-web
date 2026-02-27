@@ -12,7 +12,6 @@ export const runtime = "nodejs";
  * 2) Paragraph (blank-line delimited)
  * 3) Fallback: short window around first match term
  */
-
 function extractLogicalUnit(text: string, terms: string[]) {
     const MAX_PREVIEW = 900;
     const lower = text.toLowerCase();
@@ -79,7 +78,7 @@ function extractLogicalUnit(text: string, terms: string[]) {
     const para = text.slice(pStart, pEnd).trim();
     if (para.length >= 60) return make(para);
 
-    // 3) Fallback: window around idx (still full=window; preview may truncate)
+    // 3) Fallback: window around idx
     const radius = 350;
     const start = Math.max(0, idx - radius);
     const end = Math.min(text.length, idx + radius);
@@ -103,6 +102,123 @@ function parseRankedIndices(raw: string | null | undefined): number[] {
     }
 }
 
+/**
+ * Conservative TOC/index detector.
+ * IMPORTANT: do NOT kill Bible passages / cross-references.
+ * Only kill strong TOC/index layouts (dot leaders + page refs, explicit "Contents/Index").
+ */
+function looksLikeTOCOrIndex(s: string): boolean {
+    const t = (s ?? "").trim();
+    if (!t) return true;
+
+    const lower = t.toLowerCase();
+
+    // explicit markers
+    if (/\b(table of contents|contents|index)\b/i.test(lower)) return true;
+
+    // dotted leaders like "........"
+    const dotLeaderCount = (t.match(/\.{5,}/g) ?? []).length;
+
+    // page references like "p. 1708"
+    const pageRefCount = (t.match(/\bp\.?\s*\d{1,5}\b/gi) ?? []).length;
+
+    // TOC signal: dotted leaders are the strongest
+    if (dotLeaderCount >= 2) return true;
+
+    // index-like: lots of explicit page refs
+    if (pageRefCount >= 4) return true;
+
+    // combination: some dotted leaders + multiple page refs
+    if (dotLeaderCount >= 1 && pageRefCount >= 2) return true;
+
+    // many short lines + dotted leaders -> TOC layout
+    const lines = t.split("\n").map((x) => x.trim()).filter(Boolean);
+    const shortLines = lines.filter((x) => x.length <= 40).length;
+    if (lines.length >= 6 && dotLeaderCount >= 1 && shortLines / lines.length > 0.7) return true;
+
+    return false;
+}
+
+/**
+ * Remove obvious header/footer noise without destroying prose.
+ * Keep empty lines (paragraph structure) intact.
+ */
+function stripLikelyHeaderFooterLines(s: string): string {
+    const lines = (s ?? "").split("\n");
+
+    const cleaned = lines.filter((line) => {
+        const t = line.trim();
+
+        // Keep paragraph breaks
+        if (!t) return true;
+
+        // page number only
+        if (/^\s*\d{1,5}\s*$/.test(t)) return false;
+        if (/^\s*p\.?\s*\d{1,5}\s*$/i.test(t)) return false;
+
+        // running header (example)
+        if (/douay[-\s]?rheims/i.test(t) && /\bbible\b/i.test(t)) return false;
+
+        // lines that are basically dotted leaders
+        if ((t.match(/\.{5,}/g) ?? []).length >= 1 && t.length < 120) return false;
+
+        return true;
+    });
+
+    return cleaned.join("\n").trim();
+}
+
+/**
+ * Normalizes weird unicode + keeps whitespace safe.
+ * (Avoids "glued words" from NBSP/thin spaces.)
+ */
+function sanitizeText(s: string) {
+    return String(s ?? "")
+        .normalize("NFKC")
+
+        // Convert special space characters to normal space
+        .replace(/[\u00A0\u1680\u180E\u2000-\u200A\u202F\u205F\u3000]/g, " ")
+
+        // Remove only unsafe control chars (but KEEP \n and \t)
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, "")
+
+        // Remove BOM / invalid unicode
+        .replace(/[\uFEFF\uFFFD\uFFFE\uFFFF]/g, "")
+
+        // Remove zero-width chars
+        .replace(/[\u200B\u200C\u200D\u2060]/g, "")
+
+        // Clean trailing spaces before newline
+        .replace(/[ \t]+\n/g, "\n")
+
+        // Collapse excessive blank lines
+        .replace(/\n{3,}/g, "\n\n")
+
+        .trim();
+}
+
+/**
+ * Fixes PDF hard line wraps that cause ugly random new lines.
+ * Keeps paragraph breaks intact.
+ */
+function dewrapPdfLines(s: string) {
+    if (!s) return "";
+
+    // Normalize line endings
+    s = s.replace(/\r\n?/g, "\n");
+
+    // Convert single newlines to spaces, keep paragraph breaks (\n\n)
+    s = s.replace(/\n(?!\n)/g, " ");
+
+    // Collapse extra spaces
+    s = s.replace(/[ \t]+/g, " ");
+
+    // Normalize excessive blank lines
+    s = s.replace(/\n\n+/g, "\n\n");
+
+    return s.trim();
+}
+
 export async function POST(req: Request) {
     try {
         const auth = await requireApprovedUser(req);
@@ -115,7 +231,6 @@ export async function POST(req: Request) {
         // Optional threading
         const conversationIdIn = (body?.conversationId ?? "").toString().trim();
 
-        // Validate BEFORE quota
         if (!question) return Response.json({ error: "Missing question" }, { status: 400 });
         if (!Array.isArray(selectedBookIds) || selectedBookIds.length === 0) {
             return Response.json({ error: "Select at least one book" }, { status: 400 });
@@ -125,7 +240,7 @@ export async function POST(req: Request) {
         const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
         const { data: allowed, error: qErr } = await supabaseAdmin.rpc("increment_usage_daily", {
             p_user_id: auth.user.id,
-            p_date: today, // Postgres will cast to date
+            p_date: today,
             p_limit: 50,
         });
 
@@ -152,7 +267,7 @@ export async function POST(req: Request) {
                 .from("conversations")
                 .insert({
                     user_id: auth.user.id,
-                    title: question.slice(0, 60)
+                    title: question.slice(0, 60),
                 })
                 .select("id")
                 .single();
@@ -163,7 +278,7 @@ export async function POST(req: Request) {
             conversationId = newConvo.id;
         }
 
-        // Log user turn (before OpenAI calls)
+        // Log user turn
         {
             const { error: tErr } = await supabaseAdmin.from("conversation_turns").insert({
                 conversation_id: conversationId,
@@ -189,14 +304,13 @@ export async function POST(req: Request) {
             return Response.json({ error: "Selected books are not indexed yet." }, { status: 400 });
         }
 
-        // Retrieval (recall): pull more candidates than we return
-        const CANDIDATES_PER_BOOK = 10;
+        const CANDIDATES_PER_BOOK = 12;
         const candidates: {
             book_id: string;
             book_title: string;
             score: number | null;
-            text: string;       // preview
-            full_text: string;  // full unit
+            text: string; // preview
+            full_text: string; // full unit
         }[] = [];
 
         for (const b of usable as any[]) {
@@ -206,45 +320,46 @@ export async function POST(req: Request) {
             } as any);
 
             for (const r of (results as any)?.data ?? []) {
-                const text =
+                const rawText =
                     (Array.isArray(r?.content)
                         ? r.content.map((c: any) => c?.text).filter(Boolean).join("\n")
                         : r?.text) ?? "";
 
-                const cleaned = String(text).trim();
-                if (!cleaned) continue;
+                if (!rawText) continue;
 
-                // Extract coherent unit (saying/paragraph) based on the question terms
+                // First: sanitize raw chunk (keep \n for extraction logic)
+                const cleanedChunk = sanitizeText(rawText);
+                if (!cleanedChunk) continue;
+
+                // Extract coherent unit (saying/paragraph)
                 const terms = question.split(/\s+/).filter(Boolean);
-                const unit = extractLogicalUnit(cleaned, terms);
+                const unit = extractLogicalUnit(cleanedChunk, terms);
 
-                let fullText = unit.full;
-                let previewText = unit.preview;
+                // Sanitize unit again (safe) + remove obvious header/footer noise
+                let fullText = stripLikelyHeaderFooterLines(sanitizeText(unit.full));
+                let previewText = stripLikelyHeaderFooterLines(sanitizeText(unit.preview));
 
-                // sanitize BOTH the same way
-                const sanitize = (s: string) =>
-                    s
-                        .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
-                        .replace(/[\uFEFF\uFFFD\uFFFE\uFFFF]/g, "")
-                        .replace(/[\uFFFC\u200B\u200C\u200D\u2060]/g, "")
-                        .replace(/[ \t]+\n/g, "\n")
-                        .replace(/\n{3,}/g, "\n\n")
-                        .trim();
+                // Dewrap for display (fix one-word lines)
+                fullText = dewrapPdfLines(fullText);
+                previewText = dewrapPdfLines(previewText);
 
-                fullText = sanitize(fullText);
-                previewText = sanitize(previewText);
+                // Drop TOC/index garbage (conservative)
+                if (looksLikeTOCOrIndex(fullText) || looksLikeTOCOrIndex(previewText)) continue;
+
+                // Quality guard
+                if (fullText.length < 60 || previewText.length < 40) continue;
 
                 candidates.push({
                     book_id: b.id,
                     book_title: b.title,
                     score: typeof r?.score === "number" ? r.score : null,
                     text: previewText,
-                    full_text: fullText
+                    full_text: fullText,
                 });
             }
         }
 
-        // De-dupe identical passages (common when multiple hits point to same chunk)
+        // De-dupe identical passages
         const seen = new Set<string>();
         const deduped = candidates.filter((p) => {
             const key = `${p.book_id}::${p.text}`;
@@ -256,10 +371,8 @@ export async function POST(req: Request) {
         if (deduped.length === 0) {
             const passages: any[] = [];
 
-            // request log
             await supabaseAdmin.from("requests").insert({ user_id: auth.user.id, kind: "ask" });
 
-            // assistant turn log
             await supabaseAdmin.from("conversation_turns").insert({
                 conversation_id: conversationId,
                 role: "assistant",
@@ -269,7 +382,7 @@ export async function POST(req: Request) {
             return Response.json({ conversationId, passages });
         }
 
-        // Rerank (precision): LLM chooses best passages, but we still return quotes only.
+        // Rerank
         const RERANK_MODEL = process.env.OPENAI_RERANK_MODEL || "gpt-4o-mini";
         const MAX_CANDIDATES_TO_RERANK = 18;
         const toRerank = deduped.slice(0, MAX_CANDIDATES_TO_RERANK);
@@ -316,7 +429,7 @@ export async function POST(req: Request) {
         const rawJson = (rr as any)?.output_text ?? (rr as any)?.output?.[0]?.content?.[0]?.text ?? null;
         const ranked = parseRankedIndices(rawJson);
 
-        // If reranker fails, fall back to score sort (best-effort)
+        // fallback order
         let ordered: typeof toRerank = [];
         if (ranked.length > 0) {
             const used = new Set<number>();
@@ -338,32 +451,29 @@ export async function POST(req: Request) {
             book_id: p.book_id,
             book_title: p.book_title,
             score: p.score ?? null,
-            text: p.text,           // preview
-            full_text: p.full_text  // full saying/paragraph
+            text: p.text,
+            full_text: p.full_text,
         }));
 
-        // What you return to the client (no full_text)
+        // return to client (no full_text)
         const passages = storedPassages.map(({ full_text, ...rest }) => rest);
 
-        // Request log
         await supabaseAdmin.from("requests").insert({ user_id: auth.user.id, kind: "ask" });
 
-        // Log assistant turn (store verbatim payload)
         {
             const { error: aErr } = await supabaseAdmin.from("conversation_turns").insert({
                 conversation_id: conversationId,
                 role: "assistant",
-                answer_passages: { passages: storedPassages }
+                answer_passages: { passages: storedPassages },
             });
 
             if (aErr) return Response.json({ error: aErr.message }, { status: 500 });
         }
 
-        // Strict: quotes only + citations (book title/id)
         return Response.json({
             conversationId,
             conversationTitle: ordered.length > 0 ? question.slice(0, 60) : null,
-            passages
+            passages,
         });
     } catch (err: any) {
         console.error("Ask error:", err);

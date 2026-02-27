@@ -85,7 +85,8 @@ export default function BooksPage() {
         fd.append("file", file);
 
         setUploading(true);
-        setMsg("Uploading...");
+        // NOTE: do NOT set msg to "Uploading..." (it was shown twice: msg + button)
+        setMsg("");
 
         const res = await fetch("/api/books/upload", {
             method: "POST",
@@ -166,7 +167,6 @@ export default function BooksPage() {
             outline: "none",
             background: "#fff",
         } as const,
-        file: { width: "100%" } as const,
         row: { display: "flex", gap: 10, alignItems: "center" } as const,
         btn: {
             border: "1px solid #d9d9d9",
@@ -199,6 +199,23 @@ export default function BooksPage() {
         } as const,
         itemTitle: { margin: 0, fontSize: 14, fontWeight: 600, lineHeight: 1.2 } as const,
         itemMeta: { margin: "4px 0 0 0", fontSize: 12, opacity: 0.7 } as const,
+
+        // NEW styles for a nice file picker
+        fileRow: { display: "flex", alignItems: "center", gap: 10 } as const,
+        fileBtn: {
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "8px 10px",
+            borderRadius: 10,
+            border: "1px solid #d9d9d9",
+            background: "#fff",
+            cursor: "pointer",
+            fontSize: 13,
+            userSelect: "none",
+            whiteSpace: "nowrap",
+        } as const,
+        fileName: { fontSize: 13, opacity: 0.85, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const,
     };
 
     return (
@@ -225,13 +242,29 @@ export default function BooksPage() {
 
                     <div style={{ marginBottom: 12 }}>
                         <label style={styles.label}>PDF</label>
-                        <input
-                            type="file"
-                            accept="application/pdf"
-                            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                            style={styles.file}
-                            disabled={uploading}
-                        />
+
+                        <div style={styles.fileRow}>
+                            <label
+                                style={
+                                    uploading
+                                        ? { ...styles.fileBtn, opacity: 0.6, cursor: "not-allowed" }
+                                        : styles.fileBtn
+                                }
+                            >
+                                Choose file
+                                <input
+                                    type="file"
+                                    accept="application/pdf"
+                                    disabled={uploading}
+                                    style={{ display: "none" }}
+                                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                                />
+                            </label>
+
+                            <div style={{ ...styles.fileName, flex: 1 }}>
+                                {file ? file.name : "No file selected"}
+                            </div>
+                        </div>
                     </div>
 
                     <div style={styles.row}>

@@ -11,6 +11,8 @@ type Msg =
     | { role: "user"; text: string }
     | { role: "assistant"; passages: Passage[]; error?: string };
 
+type ThreadIndexItem = { id: string; title: string; updatedAt: number };
+
 export default function AskPage() {
     const supabase = useMemo(() => supabaseBrowser(), []);
     const router = useRouter();
@@ -26,14 +28,69 @@ export default function AskPage() {
 
     const [asking, setAsking] = useState(false);
 
+    // Existing single-state persistence (keep it; harmless)
     const LS_KEY = "saintshelp.ask.state.v1";
 
-    function saveState(next?: Partial<{
-        conversationId: string | null;
-        conversationTitle: string | null;
-        chat: Msg[];
-        selected: Record<string, boolean>;
-    }>) {
+    // Thread persistence (this is what fixes #2)
+    const LS_INDEX = "saintshelp_threads_v1"; // array of { id, title, updatedAt }
+    const LS_THREAD_PREFIX = "saintshelp_thread_v1:"; // + conversationId
+    const LS_LAST_THREAD = "saintshelp_last_thread_v1";
+
+    const [threads, setThreads] = useState<ThreadIndexItem[]>([]);
+
+    function loadIndex(): ThreadIndexItem[] {
+        try {
+            const raw = localStorage.getItem(LS_INDEX);
+            const arr = raw ? (JSON.parse(raw) as ThreadIndexItem[]) : [];
+            return Array.isArray(arr) ? arr : [];
+        } catch {
+            return [];
+        }
+    }
+
+    function saveIndex(items: ThreadIndexItem[]) {
+        localStorage.setItem(LS_INDEX, JSON.stringify(items));
+    }
+
+    function loadThread(id: string): Msg[] {
+        try {
+            const raw = localStorage.getItem(LS_THREAD_PREFIX + id);
+            const arr = raw ? (JSON.parse(raw) as Msg[]) : [];
+            return Array.isArray(arr) ? arr : [];
+        } catch {
+            return [];
+        }
+    }
+
+    function saveThread(id: string, chat: Msg[]) {
+        localStorage.setItem(LS_THREAD_PREFIX + id, JSON.stringify(chat));
+    }
+
+    function makeTitleFromChat(chat: Msg[]): string {
+        const firstUser = chat.find((m) => m.role === "user") as any;
+        const t = (firstUser?.text ?? "New thread").trim();
+        return t.length > 48 ? t.slice(0, 48) + "…" : t;
+    }
+
+    function ensureThreadExists(id: string, chatForTitle: Msg[]) {
+        const now = Date.now();
+        const title = makeTitleFromChat(chatForTitle);
+
+        setThreads((prev) => {
+            const next: ThreadIndexItem[] = [{ id, title, updatedAt: now }, ...prev.filter((t) => t.id !== id)];
+            saveIndex(next);
+            return next;
+        });
+    }
+
+    function saveState(
+        next?: Partial<{
+            conversationId: string | null;
+            conversationTitle: string | null;
+            chat: Msg[];
+            selected: Record<string, boolean>;
+        }>
+    ) {
         const payload = {
             conversationId,
             conversationTitle,
@@ -77,30 +134,18 @@ export default function AskPage() {
         const list = (json.books ?? []) as Book[];
         setBooks(list);
 
-        const sel: Record<string, boolean> = {};
-        for (const b of list) sel[b.id] = true;
-        setSelected(sel);
+        // IMPORTANT: do not clobber selection if we already loaded it from storage
+        setSelected((prev) => {
+            const hasAny = prev && Object.keys(prev).length > 0;
+            if (hasAny) return prev;
+
+            const sel: Record<string, boolean> = {};
+            for (const b of list) sel[b.id] = true;
+            return sel;
+        });
 
         setStatus("Ready");
     }
-
-    useEffect(() => {
-        loadBooks();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        const s = loadState();
-        if (s) {
-            if (typeof s.conversationId === "string" || s.conversationId === null) setConversationId(s.conversationId);
-            if (typeof s.conversationTitle === "string" || s.conversationTitle === null) setConversationTitle(s.conversationTitle);
-            if (Array.isArray(s.chat)) setChat(s.chat);
-            if (s.selected && typeof s.selected === "object") setSelected(s.selected);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-        saveState();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [conversationId, conversationTitle, chat, selected]);
 
     function selectedIds() {
         return Object.entries(selected)
@@ -114,12 +159,61 @@ export default function AskPage() {
         setSelected(sel);
     }
 
+    function openThread(id: string) {
+        const tchat = loadThread(id);
+        setConversationId(id);
+        setChat(tchat);
+        setConversationTitle(makeTitleFromChat(tchat));
+        localStorage.setItem(LS_LAST_THREAD, id);
+    }
+
     function newChat() {
+        const id = crypto.randomUUID();
+        const now = Date.now();
+
+        // create empty thread immediately
+        saveThread(id, []);
+        localStorage.setItem(LS_LAST_THREAD, id);
+
+        // update index + UI state
+        setConversationId(id);
+        setConversationTitle("New thread");
         setChat([]);
-        setConversationId(null);
-        setConversationTitle(null);
         setQuestion("");
-        localStorage.removeItem(LS_KEY);
+
+        setThreads((prev) => {
+            const next = [{ id, title: "New thread", updatedAt: now }, ...prev];
+            saveIndex(next);
+            return next;
+        });
+
+        // keep old single-state storage in sync (do NOT remove everything anymore)
+        saveState({
+            conversationId: id,
+            conversationTitle: "New thread",
+            chat: [],
+        });
+    }
+
+    function deleteThread(id: string) {
+        // delete thread payload
+        localStorage.removeItem(LS_THREAD_PREFIX + id);
+
+        // delete from index
+        const nextIndex = loadIndex().filter((t) => t.id !== id);
+        saveIndex(nextIndex);
+        setThreads(nextIndex);
+
+        // if deleting current: switch to next most recent or create new
+        if (conversationId === id) {
+            const sorted = [...nextIndex].sort((a, b) => b.updatedAt - a.updatedAt);
+            const fallback = sorted[0]?.id ?? null;
+            if (fallback) {
+                openThread(fallback);
+            } else {
+                newChat();
+            }
+        }
     }
 
     async function fetchFullSaying(passageId: string): Promise<string | null> {
@@ -213,12 +307,56 @@ export default function AskPage() {
             return;
         }
 
+        // Ensure we have a conversation id (server can assign one)
         if (json?.conversationId && !conversationId) setConversationId(String(json.conversationId));
         if (json?.conversationTitle) setConversationTitle(String(json.conversationTitle));
 
         setChat((c) => [...c, { role: "assistant", passages: (json?.passages ?? []) as Passage[] }]);
         setAsking(false);
     }
+
+    // ---------- Mount: load books + restore last thread ----------
+    useEffect(() => {
+        loadBooks();
+
+        // 1) Load thread index
+        const idx = loadIndex().sort((a, b) => b.updatedAt - a.updatedAt);
+        setThreads(idx);
+
+        // 2) Prefer last thread, else first in index, else fall back to LS_KEY state
+        const lastId = localStorage.getItem(LS_LAST_THREAD) || "";
+        const pickedId = lastId || (idx[0]?.id ?? "");
+
+        if (pickedId) {
+            openThread(pickedId);
+        } else {
+            // fallback to old single-state storage (kept for backwards compatibility)
+            const s = loadState();
+            if (s) {
+                if (typeof s.conversationId === "string" || s.conversationId === null) setConversationId(s.conversationId);
+                if (typeof s.conversationTitle === "string" || s.conversationTitle === null) setConversationTitle(s.conversationTitle);
+                if (Array.isArray(s.chat)) setChat(s.chat);
+                if (s.selected && typeof s.selected === "object") setSelected(s.selected);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // ---------- Persist: thread + thread index + old LS_KEY ----------
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        // keep old state persistence (unchanged)
+        saveState();
+
+        // new thread persistence (this is the actual fix)
+        if (conversationId) {
+            saveThread(conversationId, chat);
+            localStorage.setItem(LS_LAST_THREAD, conversationId);
+            ensureThreadExists(conversationId, chat);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conversationId, conversationTitle, chat, selected]);
 
     const styles = {
         wrap: { padding: 18 } as const,
@@ -254,27 +392,6 @@ export default function AskPage() {
             outline: "none",
         } as const,
         chatBox: { padding: 12, minHeight: 520 } as const,
-        passageCard: {
-            border: "1px solid #efefef",
-            borderRadius: 12,
-            padding: 12,
-            background: "#fafafa",
-        } as const,
-        passageMetaRow: {
-            fontSize: 12,
-            opacity: 0.85,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 8,
-        } as const,
-        quote: {
-            whiteSpace: "pre-wrap",
-            margin: 0,
-            lineHeight: 1.55,
-            fontSize: 15,
-            fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-        } as const,
         bubbleUser: {
             display: "inline-block",
             padding: "10px 12px",
@@ -291,6 +408,67 @@ export default function AskPage() {
         <div style={styles.wrap}>
             <div style={styles.layout}>
                 <aside style={{ ...styles.card, ...styles.aside }}>
+                    {/* Threads */}
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "baseline",
+                            marginBottom: 10, // fixes button touching list
+                        }}
+                    >
+                        <h2 style={styles.h2}>Threads</h2>
+                        <button style={styles.btn} onClick={newChat}>
+                            New chat
+                        </button>
+                    </div>
+
+                    {threads.length === 0 ? (
+                        <p style={{ margin: "0 0 12px 0", fontSize: 13, opacity: 0.7 }}>No threads yet.</p>
+                    ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                            {threads.map((t) => (
+                                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <button
+                                        style={{
+                                            ...styles.btn,
+                                            textAlign: "left",
+                                            flex: 1,
+                                            opacity: t.id === conversationId ? 1 : 0.85,
+                                            border: t.id === conversationId ? "1px solid #111" : "1px solid #d9d9d9",
+                                        }}
+                                        onClick={() => openThread(t.id)}
+                                    >
+                                        {t.title || "New thread"}
+                                    </button>
+
+                                    <button
+                                        aria-label="Delete thread"
+                                        title="Delete"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            deleteThread(t.id);
+                                        }}
+                                        style={{
+                                            width: 34,
+                                            height: 34,
+                                            borderRadius: 10,
+                                            border: "1px solid #d9d9d9",
+                                            background: "#fff",
+                                            cursor: "pointer",
+                                            fontSize: 18,
+                                            lineHeight: "30px",
+                                        }}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Books */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                         <h2 style={styles.h2}>Books</h2>
                         <div style={{ fontSize: 12, opacity: 0.7 }}>{status}</div>
@@ -306,9 +484,6 @@ export default function AskPage() {
                                 </button>
                                 <button style={styles.btn} onClick={() => selectAll(false)}>
                                     None
-                                </button>
-                                <button style={styles.btn} onClick={newChat}>
-                                    New chat
                                 </button>
                             </div>
 
@@ -340,7 +515,7 @@ export default function AskPage() {
                 </aside>
 
                 <section style={{ ...styles.card, ...styles.section }}>
-                    <div style={styles.chatBox}>
+                    <div style={{ padding: 12, minHeight: 520 }}>
                         {chat.length === 0 ? (
                             <p style={{ margin: 0, fontSize: 14, opacity: 0.8 }}>SaintsHelp responds with verbatim quotes only.</p>
                         ) : (
@@ -358,55 +533,65 @@ export default function AskPage() {
                                         ) : (
                                             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                                                 {m.passages.map((p, i) => (
-                                                    <div key={i} style={styles.passageCard}>
-                                                        <div key={i} style={styles.passageCard}>
-                                                            {/* Citation at top (no buttons here) */}
-                                                            <div style={{ fontSize: 12, opacity: 0.85, marginBottom: 8 }}>
-                                                                <span style={{ fontWeight: 600 }}>{p.book_title}</span>
+                                                    <div key={p.id} style={{ marginTop: 16 }}>
+                                                        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                                                            {i + 1}. {p.book_title}
+                                                        </div>
+
+                                                        <div style={{ border: "1px solid #eee", borderRadius: 16, padding: 16 }}>
+                                                            <div
+                                                                style={{
+                                                                    fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+                                                                    fontSize: 16,
+                                                                    lineHeight: 1.6,
+                                                                    whiteSpace: "pre-wrap",
+                                                                }}
+                                                            >
+                                                                {p.text}
                                                             </div>
 
-                                                            {/* Quote */}
-                                                            <div style={styles.quote}>{p.text}</div>
-
-                                                            {/* Actions at bottom */}
-                                                            <div style={{ display: "flex", gap: 8, marginTop: 10, justifyContent: "flex-end" }}>
-                                                                {p.text.endsWith("…") && (
-                                                                    <button
-                                                                        onClick={async () => {
-                                                                            const full = await fetchFullSaying(p.id);
-                                                                            if (!full) return;
-
-                                                                            setChat((prev) =>
-                                                                                prev.map((msg) => {
-                                                                                    if (msg.role !== "assistant") return msg;
-                                                                                    return {
-                                                                                        ...msg,
-                                                                                        passages: msg.passages.map((pp) => (pp.id === p.id ? { ...pp, text: full } : pp)),
-                                                                                    };
-                                                                                })
-                                                                            );
-                                                                        }}
-                                                                        style={{
-                                                                            fontSize: 12,
-                                                                            padding: "6px 10px",
-                                                                            border: "1px solid #d9d9d9",
-                                                                            borderRadius: 10,
-                                                                            background: "#fff",
-                                                                            cursor: "pointer",
-                                                                        }}
-                                                                    >
-                                                                        Show full saying
-                                                                    </button>
-                                                                )}
+                                                            <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+                                                                {(() => {
+                                                                    const t = (p.text ?? "").trimEnd();
+                                                                    return t.endsWith("…") || t.endsWith("...");
+                                                                })() && (
+                                                                        <button
+                                                                            onClick={async () => {
+                                                                                const full = await fetchFullSaying(p.id);
+                                                                                if (!full) return;
+                                                                                setChat((prev) =>
+                                                                                    prev.map((msg) => {
+                                                                                        if (msg.role !== "assistant") return msg;
+                                                                                        return {
+                                                                                            ...msg,
+                                                                                            passages: msg.passages.map((pp) =>
+                                                                                                pp.id === p.id ? { ...pp, text: full } : pp
+                                                                                            ),
+                                                                                        };
+                                                                                    })
+                                                                                );
+                                                                            }}
+                                                                            style={{
+                                                                                fontSize: 12,
+                                                                                padding: "6px 10px",
+                                                                                border: "1px solid #ddd",
+                                                                                borderRadius: 12,
+                                                                                background: "transparent",
+                                                                                cursor: "pointer",
+                                                                            }}
+                                                                        >
+                                                                            Show full saying
+                                                                        </button>
+                                                                    )}
 
                                                                 <button
                                                                     onClick={() => navigator.clipboard.writeText(p.text)}
                                                                     style={{
                                                                         fontSize: 12,
                                                                         padding: "6px 10px",
-                                                                        border: "1px solid #d9d9d9",
-                                                                        borderRadius: 10,
-                                                                        background: "#fff",
+                                                                        border: "1px solid #ddd",
+                                                                        borderRadius: 12,
+                                                                        background: "transparent",
                                                                         cursor: "pointer",
                                                                     }}
                                                                 >
@@ -414,8 +599,6 @@ export default function AskPage() {
                                                                 </button>
                                                             </div>
                                                         </div>
-
-                                                        <div style={styles.quote}>{p.text}</div>
                                                     </div>
                                                 ))}
                                             </div>
