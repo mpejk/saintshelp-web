@@ -29,10 +29,10 @@ export async function DELETE(
 
         // Delete from OpenAI (best-effort)
         if (book.openai_file_id) {
-            try { await openai.files.del(book.openai_file_id); } catch { }
+            try { await openai.files.delete(book.openai_file_id); } catch { }
         }
         if (book.openai_vector_store_id) {
-            try { await openai.vectorStores.del(book.openai_vector_store_id); } catch { }
+            try { await openai.vectorStores.delete(book.openai_vector_store_id); } catch { }
         }
 
         // Delete from Supabase Storage (best-effort)
