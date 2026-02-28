@@ -4,11 +4,14 @@ import { useMemo, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { Suspense } from "react";
+import { useTheme, tc } from "@/lib/theme";
 
 function LoginForm() {
     const supabase = useMemo(() => supabaseBrowser(), []);
     const router = useRouter();
     const searchParams = useSearchParams();
+    const { isDark, toggle } = useTheme();
+    const t = tc(isDark);
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -85,23 +88,19 @@ function LoginForm() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#f7f7f7",
-        color: "#111",
-        opacity: 1,
-        filter: "none",
+        background: t.pageBg,
+        color: t.fg,
     };
 
     const cardStyle: React.CSSProperties = {
         width: "100%",
         maxWidth: 420,
-        background: "#ffffff",
-        border: "1px solid #e7e7e7",
+        background: t.cardBg,
+        border: `1px solid ${t.border}`,
         borderRadius: 14,
         padding: 20,
-        color: "#111",
-        opacity: 1,
-        filter: "none",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+        color: t.fg,
+        boxShadow: isDark ? "none" : "0 4px 20px rgba(0,0,0,0.05)",
     };
 
     const inputStyle: React.CSSProperties = {
@@ -109,17 +108,17 @@ function LoginForm() {
         padding: "10px 12px",
         marginTop: 6,
         borderRadius: 10,
-        border: "1px solid #d9d9d9",
+        border: `1px solid ${t.borderInput}`,
         fontSize: 14,
-        background: "#fff",
-        color: "#111",
+        background: t.inputBg,
+        color: t.fg,
         outline: "none",
     };
 
     const primaryBtn: React.CSSProperties = {
-        background: "#111",
-        color: "#fff",
-        border: "1px solid #111",
+        background: t.btnActiveBg,
+        color: t.btnActiveFg,
+        border: `1px solid ${t.btnActiveBorder}`,
         borderRadius: 10,
         padding: "10px 14px",
         fontSize: 14,
@@ -127,18 +126,32 @@ function LoginForm() {
     };
 
     const secondaryBtn: React.CSSProperties = {
-        background: "#fff",
-        color: "#111",
-        border: "1px solid #d9d9d9",
+        background: t.btnBg,
+        color: t.btnFg,
+        border: `1px solid ${t.btnBorder}`,
         borderRadius: 10,
         padding: "10px 14px",
         fontSize: 14,
         cursor: "pointer",
     };
 
+    const toggleBtnStyle: React.CSSProperties = {
+        position: "fixed",
+        top: 16,
+        right: 16,
+        border: `1px solid ${t.btnBorder}`,
+        background: t.btnBg,
+        color: t.btnFg,
+        borderRadius: 10,
+        padding: "6px 10px",
+        fontSize: 16,
+        cursor: "pointer",
+    };
+
     if (resetSent) {
         return (
             <div style={pageStyle}>
+                <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={toggleBtnStyle}>{isDark ? "☀" : "☾"}</button>
                 <div style={cardStyle}>
                     <h2 style={{ margin: 0, fontSize: 18 }}>Check your email</h2>
                     <p style={{ marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
@@ -164,6 +177,7 @@ function LoginForm() {
     if (resetting) {
         return (
             <div style={pageStyle}>
+                <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={toggleBtnStyle}>{isDark ? "☀" : "☾"}</button>
                 <div style={cardStyle}>
                     <h2 style={{ margin: 0, fontSize: 18 }}>Reset password</h2>
                     <div style={{ marginTop: 16 }}>
@@ -199,6 +213,7 @@ function LoginForm() {
     if (confirming) {
         return (
             <div style={pageStyle}>
+                <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={toggleBtnStyle}>{isDark ? "☀" : "☾"}</button>
                 <div style={cardStyle}>
                     <h2 style={{ margin: 0, fontSize: 18 }}>Check your email</h2>
                     <p style={{ marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
@@ -227,6 +242,7 @@ function LoginForm() {
 
     return (
         <div style={pageStyle}>
+            <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={toggleBtnStyle}>{isDark ? "☀" : "☾"}</button>
             <div style={{ width: "100%", maxWidth: 420 }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
                 <img src="/logo.svg" alt="SaintsHelp" style={{ height: 40, width: "auto" }} />
@@ -300,7 +316,7 @@ function LoginForm() {
                 {mode === "signin" && (
                     <div style={{ marginTop: 14 }}>
                         <button
-                            style={{ background: "none", border: "none", padding: 0, fontSize: 13, color: "#555", cursor: "pointer", textDecoration: "underline" }}
+                            style={{ background: "none", border: "none", padding: 0, fontSize: 13, color: t.fgMuted, cursor: "pointer", textDecoration: "underline" }}
                             onClick={() => { setResetting(true); setMsg(""); }}
                         >
                             Forgot password?

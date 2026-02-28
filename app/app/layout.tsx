@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useTheme, tc } from "@/lib/theme";
 
 type Profile = {
     status: "pending" | "approved" | "blocked";
@@ -48,33 +49,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const approved = profile?.status === "approved";
     const isAdmin = !!profile?.is_admin;
 
+    const { isDark, toggle } = useTheme();
+    const t = tc(isDark);
+
     const styles = {
         page: {
             fontFamily:
                 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
-            color: "#111",
+            color: t.fg,
         } as const,
         btn: {
-            border: "1px solid #d9d9d9",
-            background: "#fff",
+            border: `1px solid ${t.btnBorder}`,
+            background: t.btnBg,
+            color: t.btnFg,
             borderRadius: 10,
             padding: "8px 10px",
             fontSize: 13,
             cursor: "pointer",
         } as const,
         btnActive: {
-            border: "1px solid #111",
-            background: "#111",
-            color: "#fff",
+            border: `1px solid ${t.btnActiveBorder}`,
+            background: t.btnActiveBg,
+            color: t.btnActiveFg,
             borderRadius: 10,
             padding: "8px 10px",
             fontSize: 13,
             cursor: "pointer",
         } as const,
         content: {
-            border: "1px solid #e7e7e7",
+            border: `1px solid ${t.border}`,
             borderRadius: 12,
-            background: "#fff",
+            background: t.cardBg,
         } as const,
         meta: { fontSize: 12, opacity: 0.75 } as const,
         logoWrap: {
@@ -108,6 +113,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
 
                 <div className="app-nav">
+                    <button
+                        onClick={toggle}
+                        title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                        style={{ ...styles.btn, fontSize: 16, padding: "6px 10px" }}
+                    >
+                        {isDark ? "☀" : "☾"}
+                    </button>
                     {approved ? (
                         <>
                             <button style={linkStyle("/app")} onClick={() => router.push("/app")}>

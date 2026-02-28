@@ -26,9 +26,24 @@ body {
 }
 
 body {
-  background: var(--background);
+  background: #f7f7f7;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Dark mode body background */
+[data-theme="dark"] body {
+  background: #111111;
+}
+
+/* Dark mode sticky elements (mobile) */
+@media (max-width: 700px) {
+  [data-theme="dark"] .app-topbar {
+    background: #111111;
+  }
+  [data-theme="dark"] .ask-input-row {
+    background: #111111;
+  }
 }
 
 /* ===== App layout ===== */

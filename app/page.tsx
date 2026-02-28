@@ -3,10 +3,13 @@
 import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useTheme, tc } from "@/lib/theme";
 
 export default function Home() {
     const supabase = useMemo(() => supabaseBrowser(), []);
     const router = useRouter();
+    const { isDark, toggle } = useTheme();
+    const t = tc(isDark);
 
     // Redirect already-authenticated users straight to the app
     useEffect(() => {
@@ -18,14 +21,14 @@ export default function Home() {
     const styles = {
         page: {
             minHeight: "100vh",
-            background: "#f7f7f7",
+            background: t.pageBg,
             display: "flex",
             flexDirection: "column" as const,
             alignItems: "center",
             justifyContent: "center",
             padding: 24,
             fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
-            color: "#111",
+            color: t.fg,
         },
         inner: {
             maxWidth: 540,
@@ -45,7 +48,7 @@ export default function Home() {
         },
         desc: {
             fontSize: 16,
-            color: "#555",
+            color: t.fgMuted,
             lineHeight: 1.65,
             margin: "0 0 32px 0",
         },
@@ -56,9 +59,9 @@ export default function Home() {
             flexWrap: "wrap" as const,
         },
         primaryBtn: {
-            background: "#111",
-            color: "#fff",
-            border: "1px solid #111",
+            background: t.btnActiveBg,
+            color: t.btnActiveFg,
+            border: `1px solid ${t.btnActiveBorder}`,
             borderRadius: 10,
             padding: "11px 22px",
             fontSize: 14,
@@ -66,9 +69,9 @@ export default function Home() {
             fontFamily: "inherit",
         },
         secondaryBtn: {
-            background: "#fff",
-            color: "#111",
-            border: "1px solid #d9d9d9",
+            background: t.btnBg,
+            color: t.btnFg,
+            border: `1px solid ${t.btnBorder}`,
             borderRadius: 10,
             padding: "11px 22px",
             fontSize: 14,
@@ -78,7 +81,7 @@ export default function Home() {
         note: {
             marginTop: 22,
             fontSize: 13,
-            color: "#999",
+            color: t.fgSubtle,
             lineHeight: 1.5,
         },
         features: {
@@ -89,8 +92,8 @@ export default function Home() {
             textAlign: "left" as const,
         },
         featureCard: {
-            background: "#fff",
-            border: "1px solid #e7e7e7",
+            background: t.cardBg,
+            border: `1px solid ${t.border}`,
             borderRadius: 12,
             padding: "14px 16px",
         },
@@ -102,13 +105,28 @@ export default function Home() {
         featureDesc: {
             margin: 0,
             fontSize: 12,
-            color: "#666",
+            color: t.fgMuted,
             lineHeight: 1.5,
+        },
+        toggleBtn: {
+            position: "fixed" as const,
+            top: 16,
+            right: 16,
+            border: `1px solid ${t.btnBorder}`,
+            background: t.btnBg,
+            color: t.btnFg,
+            borderRadius: 10,
+            padding: "6px 10px",
+            fontSize: 16,
+            cursor: "pointer",
         },
     };
 
     return (
         <div style={styles.page}>
+            <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={styles.toggleBtn}>
+                {isDark ? "☀" : "☾"}
+            </button>
             <div style={styles.inner}>
                 <img src="/logo.svg" alt="SaintsHelp" style={styles.logo} />
 

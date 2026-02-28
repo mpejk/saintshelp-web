@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useRouter } from "next/navigation";
+import { useTheme, tc } from "@/lib/theme";
 
 type Book = { id: string; title: string; created_at: string };
 type Passage = { id: string; book_id: string; book_title: string; score: number | null; text: string };
@@ -384,26 +385,30 @@ export default function AskPage() {
         });
     }, [chat]);
 
+    const { isDark } = useTheme();
+    const t = tc(isDark);
+
     const styles = {
         wrap: {} as const,
         layout: {} as const,
-        card: { border: "1px solid #efefef", borderRadius: 12, background: "#fff" } as const,
+        card: { border: `1px solid ${t.border}`, borderRadius: 12, background: t.cardBg } as const,
         aside: { padding: 12 } as const,
         section: {} as const,
         h2: { margin: "0 0 8px 0", fontSize: 14, fontWeight: 650 } as const,
         subhead: { margin: 0, fontSize: 12, opacity: 0.7 } as const,
         btn: {
-            border: "1px solid #d9d9d9",
-            background: "#fff",
+            border: `1px solid ${t.btnBorder}`,
+            background: t.btnBg,
+            color: t.btnFg,
             borderRadius: 10,
             padding: "8px 10px",
             fontSize: 13,
             cursor: "pointer",
         } as const,
         btnPrimary: {
-            border: "1px solid #111",
-            background: "#111",
-            color: "#fff",
+            border: `1px solid ${t.btnActiveBorder}`,
+            background: t.btnActiveBg,
+            color: t.btnActiveFg,
             borderRadius: 10,
             padding: "8px 12px",
             fontSize: 13,
@@ -411,18 +416,20 @@ export default function AskPage() {
         } as const,
         input: {
             flex: 1,
-            border: "1px solid #d9d9d9",
+            border: `1px solid ${t.borderInput}`,
             borderRadius: 10,
             padding: "10px 12px",
             fontSize: 14,
             outline: "none",
+            background: t.inputBg,
+            color: t.fg,
         } as const,
         bubbleUser: {
             display: "inline-block",
             padding: "10px 12px",
             borderRadius: 12,
-            background: "#111",
-            color: "#fff",
+            background: t.btnActiveBg,
+            color: t.btnActiveFg,
             maxWidth: "85%",
             lineHeight: 1.35,
             whiteSpace: "pre-wrap",
@@ -471,7 +478,7 @@ export default function AskPage() {
                                             textAlign: "left",
                                             flex: 1,
                                             opacity: t.id === conversationId ? 1 : 0.85,
-                                            border: t.id === conversationId ? "1px solid #111" : "1px solid #d9d9d9",
+                                            border: t.id === conversationId ? `1px solid ${tc(isDark).btnActiveBorder}` : `1px solid ${tc(isDark).btnBorder}`,
                                         }}
                                         onClick={() => openThread(t.id)}
                                     >
@@ -490,8 +497,9 @@ export default function AskPage() {
                                             width: 34,
                                             height: 34,
                                             borderRadius: 10,
-                                            border: "1px solid #d9d9d9",
-                                            background: "#fff",
+                                            border: `1px solid ${tc(isDark).btnBorder}`,
+                                            background: tc(isDark).btnBg,
+                                            color: tc(isDark).btnFg,
                                             cursor: "pointer",
                                             fontSize: 18,
                                             lineHeight: "30px",
@@ -541,7 +549,7 @@ export default function AskPage() {
                             </div>
 
                             {conversationTitle && (
-                                <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #efefef" }}>
+                                <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${t.border}` }}>
                                     <div style={styles.subhead}>Conversation</div>
                                     <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.3 }}>{conversationTitle}</div>
                                 </div>
@@ -574,12 +582,13 @@ export default function AskPage() {
                                             style={{
                                                 textAlign: "left",
                                                 fontSize: 13,
-                                                background: "#fafafa",
-                                                border: "1px solid #efefef",
+                                                background: t.suggestionBg,
+                                                border: `1px solid ${t.suggestionBorder}`,
                                                 borderRadius: 10,
                                                 padding: "9px 12px",
                                                 cursor: "pointer",
                                                 lineHeight: 1.4,
+                                                color: t.fg,
                                             }}
                                         >
                                             {q}
@@ -610,13 +619,14 @@ export default function AskPage() {
                                                             {i + 1}. {p.book_title}
                                                         </div>
 
-                                                        <div style={{ border: "1px solid #eee", borderRadius: 16, padding: 16 }}>
+                                                        <div style={{ border: `1px solid ${t.border}`, borderRadius: 16, padding: 16 }}>
                                                             <div
                                                                 style={{
                                                                     fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
                                                                     fontSize: 16,
                                                                     lineHeight: 1.6,
                                                                     whiteSpace: "pre-wrap",
+                                                                    color: t.fg,
                                                                 }}
                                                             >
                                                                 {p.text}
@@ -649,9 +659,10 @@ export default function AskPage() {
                                                                             style={{
                                                                                 fontSize: 12,
                                                                                 padding: "6px 10px",
-                                                                                border: "1px solid #ddd",
+                                                                                border: `1px solid ${t.borderInput}`,
                                                                                 borderRadius: 12,
                                                                                 background: "transparent",
+                                                                                color: t.fg,
                                                                                 cursor: loadingFullId === p.id ? "default" : "pointer",
                                                                                 opacity: loadingFullId === p.id ? 0.6 : 1,
                                                                             }}
@@ -669,11 +680,11 @@ export default function AskPage() {
                                                                     style={{
                                                                         fontSize: 12,
                                                                         padding: "6px 10px",
-                                                                        border: "1px solid #ddd",
+                                                                        border: `1px solid ${t.borderInput}`,
                                                                         borderRadius: 12,
-                                                                        background: copiedId === p.id ? "#f0fff4" : "transparent",
+                                                                        background: copiedId === p.id ? t.copyActiveBg : "transparent",
                                                                         cursor: "pointer",
-                                                                        color: copiedId === p.id ? "#2e7d32" : "inherit",
+                                                                        color: copiedId === p.id ? t.copyActiveFg : t.fg,
                                                                     }}
                                                                 >
                                                                     {copiedId === p.id ? "Copied!" : "Copy"}
@@ -692,7 +703,7 @@ export default function AskPage() {
                         <div ref={chatEndRef} />
                     </div>
 
-                    <div className="ask-input-row" style={{ display: "flex", gap: 10, padding: 12, borderTop: "1px solid #efefef" }}>
+                    <div className="ask-input-row" style={{ display: "flex", gap: 10, padding: 12, borderTop: `1px solid ${t.border}` }}>
                         <input
                             value={question}
                             onChange={(e) => setQuestion(e.target.value)}
