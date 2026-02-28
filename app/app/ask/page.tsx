@@ -79,6 +79,20 @@ export default function AskPage() {
         });
     }
 
+    async function clearAllChats(): Promise<void> {
+        if (!confirm("Delete all conversations? This cannot be undone.")) return;
+        const token = await getToken();
+        if (!token) return;
+        await fetch("/api/conversations", {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        setThreads([]);
+        setConversationId(null);
+        setConversationTitle(null);
+        setChat([]);
+    }
+
     async function loadBooks() {
         const { data: sessionData } = await supabase.auth.getSession();
         const session = sessionData.session;
@@ -364,9 +378,20 @@ export default function AskPage() {
                         }}
                     >
                         <h2 style={styles.h2}>Threads</h2>
-                        <button style={styles.btn} onClick={newChat}>
-                            New chat
-                        </button>
+                        <div style={{ display: "flex", gap: 6 }}>
+                            <button style={styles.btn} onClick={newChat}>
+                                New chat
+                            </button>
+                            {threads.length > 0 && (
+                                <button
+                                    style={{ ...styles.btn, opacity: 0.6 }}
+                                    onClick={clearAllChats}
+                                    title="Delete all conversations"
+                                >
+                                    Clear all
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {threads.length === 0 ? (
