@@ -27,92 +27,56 @@ export default function AskPage() {
     const [conversationTitle, setConversationTitle] = useState<string | null>(null);
 
     const [asking, setAsking] = useState(false);
+    const [loadingThread, setLoadingThread] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
 
-    // All keys namespaced by userId so accounts never share data
-    const LS_KEY = `saintshelp.ask.state.v1.${userId ?? ""}`;
-    const LS_INDEX = `saintshelp_threads_v1.${userId ?? ""}`;
-    const LS_THREAD_PREFIX = `saintshelp_thread_v1.${userId ?? ""}:`;
-    const LS_LAST_THREAD = `saintshelp_last_thread_v1.${userId ?? ""}`;
+    // Book selection preference stored per-user (UI preference, not conversation data)
+    const LS_SELECTED_KEY = `saintshelp.selected.v1.${userId ?? ""}`;
 
     const [threads, setThreads] = useState<ThreadIndexItem[]>([]);
-
-    function loadIndex(): ThreadIndexItem[] {
-        try {
-            const raw = localStorage.getItem(LS_INDEX);
-            const arr = raw ? (JSON.parse(raw) as ThreadIndexItem[]) : [];
-            return Array.isArray(arr) ? arr : [];
-        } catch {
-            return [];
-        }
-    }
-
-    function saveIndex(items: ThreadIndexItem[]) {
-        localStorage.setItem(LS_INDEX, JSON.stringify(items));
-    }
-
-    function loadThread(id: string): Msg[] {
-        try {
-            const raw = localStorage.getItem(LS_THREAD_PREFIX + id);
-            const arr = raw ? (JSON.parse(raw) as Msg[]) : [];
-            return Array.isArray(arr) ? arr : [];
-        } catch {
-            return [];
-        }
-    }
-
-    function saveThread(id: string, chat: Msg[]) {
-        localStorage.setItem(LS_THREAD_PREFIX + id, JSON.stringify(chat));
-    }
-
-    function makeTitleFromChat(chat: Msg[]): string {
-        const firstUser = chat.find((m) => m.role === "user") as any;
-        const t = (firstUser?.text ?? "New thread").trim();
-        return t.length > 48 ? t.slice(0, 48) + "…" : t;
-    }
-
-    function ensureThreadExists(id: string, chatForTitle: Msg[]) {
-        const now = Date.now();
-        const title = makeTitleFromChat(chatForTitle);
-
-        setThreads((prev) => {
-            const next: ThreadIndexItem[] = [{ id, title, updatedAt: now }, ...prev.filter((t) => t.id !== id)];
-            saveIndex(next);
-            return next;
-        });
-    }
-
-    function saveState(
-        next?: Partial<{
-            conversationId: string | null;
-            conversationTitle: string | null;
-            chat: Msg[];
-            selected: Record<string, boolean>;
-        }>
-    ) {
-        const payload = {
-            conversationId,
-            conversationTitle,
-            chat,
-            selected,
-            ...next,
-        };
-        localStorage.setItem(LS_KEY, JSON.stringify(payload));
-    }
-
-    function loadState() {
-        try {
-            const raw = localStorage.getItem(LS_KEY);
-            if (!raw) return null;
-            return JSON.parse(raw);
-        } catch {
-            return null;
-        }
-    }
 
     async function getToken(): Promise<string | null> {
         const { data } = await supabase.auth.getSession();
         return data.session?.access_token ?? null;
+    }
+
+    async function fetchThreads(): Promise<ThreadIndexItem[]> {
+        const token = await getToken();
+        if (!token) return [];
+        const res = await fetch("/api/conversations", {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return [];
+        const json = await res.json().catch(() => ({}));
+        return (json.conversations ?? []).map((c: any) => ({
+            id: c.id,
+            title: c.title ?? "Untitled",
+            updatedAt: Date.parse(c.created_at),
+        }));
+    }
+
+    async function fetchMessages(id: string): Promise<{ title: string; messages: Msg[] } | null> {
+        const token = await getToken();
+        if (!token) return null;
+        const res = await fetch(`/api/conversations/${id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return null;
+        const json = await res.json().catch(() => null);
+        if (!json) return null;
+        return {
+            title: json.conversation?.title ?? "Untitled",
+            messages: (json.messages ?? []) as Msg[],
+        };
+    }
+
+    async function deleteConversationApi(id: string): Promise<void> {
+        const token = await getToken();
+        if (!token) return;
+        await fetch(`/api/conversations/${id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+        });
     }
 
     async function loadBooks() {
@@ -122,7 +86,8 @@ export default function AskPage() {
             router.push("/login");
             return;
         }
-        setUserId(session.user.id);
+        const uid = session.user.id;
+        setUserId(uid);
         const token = session.access_token;
 
         const res = await fetch("/api/books", { headers: { Authorization: `Bearer ${token}` } });
@@ -136,11 +101,15 @@ export default function AskPage() {
         const list = (json.books ?? []) as Book[];
         setBooks(list);
 
-        // IMPORTANT: do not clobber selection if we already loaded it from storage
-        setSelected((prev) => {
-            const hasAny = prev && Object.keys(prev).length > 0;
-            if (hasAny) return prev;
-
+        // Restore saved book selection, or default all selected
+        setSelected(() => {
+            try {
+                const raw = localStorage.getItem(`saintshelp.selected.v1.${uid}`);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === "object") return parsed as Record<string, boolean>;
+                }
+            } catch {}
             const sel: Record<string, boolean> = {};
             for (const b of list) sel[b.id] = true;
             return sel;
@@ -161,57 +130,33 @@ export default function AskPage() {
         setSelected(sel);
     }
 
-    function openThread(id: string) {
-        const tchat = loadThread(id);
+    async function openThread(id: string) {
+        setLoadingThread(true);
         setConversationId(id);
-        setChat(tchat);
-        setConversationTitle(makeTitleFromChat(tchat));
-        localStorage.setItem(LS_LAST_THREAD, id);
+        setChat([]);
+        const result = await fetchMessages(id);
+        if (result) {
+            setChat(result.messages);
+            setConversationTitle(result.title);
+        }
+        setLoadingThread(false);
     }
 
     function newChat() {
-        const id = crypto.randomUUID();
-        const now = Date.now();
-
-        // create empty thread immediately
-        saveThread(id, []);
-        localStorage.setItem(LS_LAST_THREAD, id);
-
-        // update index + UI state
-        setConversationId(id);
-        setConversationTitle("New thread");
+        setConversationId(null);
+        setConversationTitle(null);
         setChat([]);
         setQuestion("");
-
-        setThreads((prev) => {
-            const next = [{ id, title: "New thread", updatedAt: now }, ...prev];
-            saveIndex(next);
-            return next;
-        });
-
-        // keep old single-state storage in sync (do NOT remove everything anymore)
-        saveState({
-            conversationId: id,
-            conversationTitle: "New thread",
-            chat: [],
-        });
     }
 
-    function deleteThread(id: string) {
-        // delete thread payload
-        localStorage.removeItem(LS_THREAD_PREFIX + id);
+    async function deleteThread(id: string) {
+        await deleteConversationApi(id);
+        const refreshed = await fetchThreads();
+        setThreads(refreshed);
 
-        // delete from index
-        const nextIndex = loadIndex().filter((t) => t.id !== id);
-        saveIndex(nextIndex);
-        setThreads(nextIndex);
-
-        // if deleting current: switch to next most recent or create new
         if (conversationId === id) {
-            const sorted = [...nextIndex].sort((a, b) => b.updatedAt - a.updatedAt);
-            const fallback = sorted[0]?.id ?? null;
-            if (fallback) {
-                openThread(fallback);
+            if (refreshed.length > 0) {
+                await openThread(refreshed[0].id);
             } else {
                 newChat();
             }
@@ -309,12 +254,16 @@ export default function AskPage() {
             return;
         }
 
-        // Ensure we have a conversation id (server can assign one)
+        // Ensure we have a conversation id (server assigns one)
         if (json?.conversationId && !conversationId) setConversationId(String(json.conversationId));
         if (json?.conversationTitle) setConversationTitle(String(json.conversationTitle));
 
         setChat((c) => [...c, { role: "assistant", passages: (json?.passages ?? []) as Passage[] }]);
         setAsking(false);
+
+        // Refresh thread list so new/updated conversation appears
+        const refreshed = await fetchThreads();
+        setThreads(refreshed);
     }
 
     // ---------- Mount: load books (also sets userId) ----------
@@ -323,48 +272,31 @@ export default function AskPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ---------- Once userId is known: restore last thread from namespaced storage ----------
+    // ---------- Once userId is known: load threads from DB ----------
     useEffect(() => {
         if (!userId) return;
 
-        // 1) Load thread index
-        const idx = loadIndex().sort((a, b) => b.updatedAt - a.updatedAt);
-        setThreads(idx);
+        (async () => {
+            const idx = await fetchThreads();
+            setThreads(idx);
 
-        // 2) Prefer last thread, else first in index, else fall back to LS_KEY state
-        const lastId = localStorage.getItem(LS_LAST_THREAD) || "";
-        const pickedId = lastId || (idx[0]?.id ?? "");
-
-        if (pickedId) {
-            openThread(pickedId);
-        } else {
-            const s = loadState();
-            if (s) {
-                if (typeof s.conversationId === "string" || s.conversationId === null) setConversationId(s.conversationId);
-                if (typeof s.conversationTitle === "string" || s.conversationTitle === null) setConversationTitle(s.conversationTitle);
-                if (Array.isArray(s.chat)) setChat(s.chat);
-                if (s.selected && typeof s.selected === "object") setSelected(s.selected);
+            if (idx.length > 0) {
+                await openThread(idx[0].id);
+            } else {
+                setChat([]);
+                setConversationId(null);
             }
-        }
+        })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId]);
 
-    // ---------- Persist: thread + thread index + old LS_KEY ----------
+    // ---------- Persist book selection preference ----------
     useEffect(() => {
-        if (typeof window === "undefined") return;
         if (!userId) return;
-
-        // keep old state persistence (unchanged)
-        saveState();
-
-        // new thread persistence (this is the actual fix)
-        if (conversationId) {
-            saveThread(conversationId, chat);
-            localStorage.setItem(LS_LAST_THREAD, conversationId);
-            ensureThreadExists(conversationId, chat);
-        }
+        if (Object.keys(selected).length === 0) return;
+        localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(selected));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [conversationId, conversationTitle, chat, selected]);
+    }, [selected]);
 
     const styles = {
         wrap: { padding: 18 } as const,
@@ -422,7 +354,7 @@ export default function AskPage() {
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "baseline",
-                            marginBottom: 10, // fixes button touching list
+                            marginBottom: 10,
                         }}
                     >
                         <h2 style={styles.h2}>Threads</h2>
@@ -430,10 +362,6 @@ export default function AskPage() {
                             New chat
                         </button>
                     </div>
-
-                    <p style={{ margin: "0 0 10px 0", fontSize: 11, opacity: 0.5, lineHeight: 1.4 }}>
-                        Conversations are saved in this browser only.
-                    </p>
 
                     {threads.length === 0 ? (
                         <p style={{ margin: "0 0 12px 0", fontSize: 13, opacity: 0.7 }}>No threads yet.</p>
@@ -528,7 +456,9 @@ export default function AskPage() {
 
                 <section style={{ ...styles.card, ...styles.section }}>
                     <div style={{ padding: 12, minHeight: 520 }}>
-                        {chat.length === 0 ? (
+                        {loadingThread ? (
+                            <div style={{ fontSize: 13, opacity: 0.6, padding: 12 }}>Loading...</div>
+                        ) : chat.length === 0 ? (
                             <div>
                                 <p style={{ margin: "0 0 6px 0", fontSize: 14, fontWeight: 600 }}>
                                     How it works
