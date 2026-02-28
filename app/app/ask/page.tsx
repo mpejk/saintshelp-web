@@ -351,7 +351,6 @@ export default function AskPage() {
             fontSize: 14,
             outline: "none",
         } as const,
-        chatBox: { padding: 12, minHeight: 520 } as const,
         bubbleUser: {
             display: "inline-block",
             padding: "10px 12px",
@@ -486,7 +485,7 @@ export default function AskPage() {
                 </aside>
 
                 <section className="ask-main" style={styles.card}>
-                    <div className="ask-chat-box" style={{ padding: 12, minHeight: 520 }}>
+                    <div className="ask-chat-box" style={{ padding: 12 }}>
                         {loadingThread ? (
                             <div style={{ fontSize: 13, opacity: 0.6, padding: 12 }}>Loading...</div>
                         ) : chat.length === 0 ? (

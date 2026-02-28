@@ -19,6 +19,11 @@
   }
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -28,17 +33,22 @@ body {
 /* ===== App layout ===== */
 .app-page {
   max-width: 1100px;
-  margin: 28px auto;
-  padding: 16px;
+  margin: 0 auto;
+  padding: 16px 16px 0;
+  box-sizing: border-box;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .app-topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  padding-bottom: 14px;
   gap: 8px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .app-nav {
@@ -48,36 +58,63 @@ body {
   flex-wrap: wrap;
 }
 
+/* Wrapper around page content (children in layout.tsx) */
+.app-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
 /* ===== Ask page ===== */
 .ask-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   padding: 18px;
 }
 
 .ask-layout {
+  flex: 1;
   display: flex;
   gap: 16px;
-  align-items: flex-start;
+  align-items: stretch;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .ask-aside {
   width: 340px;
   flex-shrink: 0;
+  overflow-y: auto;
 }
 
 .ask-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Scrollable chat area */
+.ask-chat-box {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0 !important;
 }
 
 /* ===== Mobile (≤ 700px) ===== */
 @media (max-width: 700px) {
   .app-page {
-    margin: 6px auto;
-    padding: 10px;
+    padding: 10px 10px 0;
   }
 
   .app-topbar {
-    margin-bottom: 10px;
+    padding-bottom: 10px;
   }
 
   .ask-wrap {
@@ -87,10 +124,12 @@ body {
   .ask-layout {
     flex-direction: column;
     gap: 10px;
+    overflow-y: auto;
   }
 
   .ask-aside {
     width: 100%;
+    overflow-y: visible;
   }
 
   .ask-threads-list {
@@ -98,7 +137,7 @@ body {
     overflow-y: auto;
   }
 
-  .ask-chat-box {
-    min-height: 300px !important;
+  .ask-main {
+    min-height: 400px;
   }
 }

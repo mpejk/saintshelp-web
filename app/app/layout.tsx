@@ -152,7 +152,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
             </div>
 
-            <div style={styles.content}>{children}</div>
+            <div className="app-content" style={styles.content}>{children}</div>
         </main>
     );
 }
