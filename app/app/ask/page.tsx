@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useRouter } from "next/navigation";
 
@@ -29,6 +29,8 @@ export default function AskPage() {
     const [asking, setAsking] = useState(false);
     const [loadingThread, setLoadingThread] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
+
+    const chatEndRef = useRef<HTMLDivElement>(null);
 
     // Book selection preference stored per-user (UI preference, not conversation data)
     const LS_SELECTED_KEY = `saintshelp.selected.v1.${userId ?? ""}`;
@@ -317,6 +319,11 @@ export default function AskPage() {
         localStorage.setItem(LS_SELECTED_KEY, JSON.stringify(selected));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selected]);
+
+    // ---------- Auto-scroll to bottom when chat updates ----------
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, [chat]);
 
     const styles = {
         wrap: {} as const,
@@ -614,6 +621,7 @@ export default function AskPage() {
                                 ))}
                             </div>
                         )}
+                        <div ref={chatEndRef} />
                     </div>
 
                     <div className="ask-input-row" style={{ display: "flex", gap: 10, padding: 12, borderTop: "1px solid #efefef" }}>
