@@ -33,6 +33,8 @@ export default function AskPage() {
     const [loadingFullId, setLoadingFullId] = useState<string | null>(null);
 
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const lastUserMsgRef = useRef<HTMLDivElement>(null);
+    const scrollToUserMsg = useRef(false);
 
     // Book selection preference stored per-user (UI preference, not conversation data)
     const LS_SELECTED_KEY = `saintshelp.selected.v1.${userId ?? ""}`;
@@ -227,6 +229,7 @@ export default function AskPage() {
         }
 
         setAsking(true);
+        scrollToUserMsg.current = true;
         setChat((c) => [...c, { role: "user", text: q }]);
         setQuestion("");
 
@@ -323,9 +326,12 @@ export default function AskPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selected]);
 
-    // ---------- Auto-scroll to bottom when chat updates ----------
+    // ---------- Scroll: show user's question at top when submitted ----------
     useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+        if (scrollToUserMsg.current) {
+            lastUserMsgRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            scrollToUserMsg.current = false;
+        }
     }, [chat]);
 
     const styles = {
@@ -537,8 +543,11 @@ export default function AskPage() {
                             </div>
                         ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                                {chat.map((m, idx) => (
-                                    <div key={idx}>
+                                {chat.map((m, idx) => {
+                                    const isLastUserMsg = m.role === "user" &&
+                                        !chat.slice(idx + 1).some((mm) => mm.role === "user");
+                                    return (
+                                    <div key={idx} ref={isLastUserMsg ? lastUserMsgRef : null}>
                                         {m.role === "user" ? (
                                             <div style={{ display: "flex", justifyContent: "flex-end" }}>
                                                 <div style={styles.bubbleUser}>{m.text}</div>
@@ -630,7 +639,8 @@ export default function AskPage() {
                                             </div>
                                         )}
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                         <div ref={chatEndRef} />
