@@ -234,7 +234,7 @@ export default function BooksPage() {
             <h1 style={styles.h1}>Books</h1>
             <p style={styles.muted}>{status}</p>
 
-            <div style={styles.grid}>
+            <div className="books-grid">
                 {/* Upload — admin only */}
                 {isAdmin && <div style={styles.card}>
                     <p style={styles.cardTitle}>Upload PDF</p>

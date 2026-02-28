@@ -145,7 +145,8 @@ export default function AdminPage() {
             {loading ? (
                 <div style={{ marginTop: 14, fontSize: 13 }}>Loading…</div>
             ) : (
-                <table style={styles.table}>
+                <div style={{ overflowX: "auto", marginTop: 14 }}>
+                <table style={{ ...styles.table, marginTop: 0 }}>
                     <thead>
                         <tr>
                             <th style={styles.th}>Email</th>
@@ -187,6 +188,7 @@ export default function AdminPage() {
                         )}
                     </tbody>
                 </table>
+                </div>
             )}
         </div>
     );

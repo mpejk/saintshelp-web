@@ -70,6 +70,24 @@ body {
   margin-bottom: 16px;
 }
 
+/* ===== Landing page ===== */
+.landing-features {
+  margin-top: 48px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  text-align: left;
+}
+
+/* ===== App home / books two-column grids ===== */
+.home-grid,
+.books-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
 /* ===== Ask page ===== */
 .ask-wrap {
   flex: 1;
@@ -111,6 +129,16 @@ body {
 
 /* ===== Mobile (≤ 700px) ===== */
 @media (max-width: 700px) {
+  .landing-features {
+    grid-template-columns: 1fr;
+    margin-top: 28px;
+  }
+
+  .home-grid,
+  .books-grid {
+    grid-template-columns: 1fr;
+  }
+
   /* On mobile: natural scroll, sticky topbar + sticky input */
   .app-page {
     height: auto;

@@ -29,6 +29,8 @@ export default function AskPage() {
     const [asking, setAsking] = useState(false);
     const [loadingThread, setLoadingThread] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [loadingFullId, setLoadingFullId] = useState<string | null>(null);
 
     const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -172,6 +174,7 @@ export default function AskPage() {
     }
 
     async function deleteThread(id: string) {
+        if (!confirm("Delete this conversation?")) return;
         await deleteConversationApi(id);
         const refreshed = await fetchThreads();
         setThreads(refreshed);
@@ -570,8 +573,11 @@ export default function AskPage() {
                                                                     return t.endsWith("…") || t.endsWith("...");
                                                                 })() && (
                                                                         <button
+                                                                            disabled={loadingFullId === p.id}
                                                                             onClick={async () => {
+                                                                                setLoadingFullId(p.id);
                                                                                 const full = await fetchFullSaying(p.id);
+                                                                                setLoadingFullId(null);
                                                                                 if (!full) return;
                                                                                 setChat((prev) =>
                                                                                     prev.map((msg) => {
@@ -591,25 +597,31 @@ export default function AskPage() {
                                                                                 border: "1px solid #ddd",
                                                                                 borderRadius: 12,
                                                                                 background: "transparent",
-                                                                                cursor: "pointer",
+                                                                                cursor: loadingFullId === p.id ? "default" : "pointer",
+                                                                                opacity: loadingFullId === p.id ? 0.6 : 1,
                                                                             }}
                                                                         >
-                                                                            Show full saying
+                                                                            {loadingFullId === p.id ? "Loading…" : "Show full saying"}
                                                                         </button>
                                                                     )}
 
                                                                 <button
-                                                                    onClick={() => navigator.clipboard.writeText(p.text)}
+                                                                    onClick={() => {
+                                                                        navigator.clipboard.writeText(p.text);
+                                                                        setCopiedId(p.id);
+                                                                        setTimeout(() => setCopiedId(null), 2000);
+                                                                    }}
                                                                     style={{
                                                                         fontSize: 12,
                                                                         padding: "6px 10px",
                                                                         border: "1px solid #ddd",
                                                                         borderRadius: 12,
-                                                                        background: "transparent",
+                                                                        background: copiedId === p.id ? "#f0fff4" : "transparent",
                                                                         cursor: "pointer",
+                                                                        color: copiedId === p.id ? "#2e7d32" : "inherit",
                                                                     }}
                                                                 >
-                                                                    Copy
+                                                                    {copiedId === p.id ? "Copied!" : "Copy"}
                                                                 </button>
                                                             </div>
                                                         </div>

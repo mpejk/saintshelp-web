@@ -106,7 +106,7 @@ export default function AppHome() {
             )}
 
             {approved && (
-                <div style={styles.grid}>
+                <div className="home-grid">
                     {profile.is_admin && (
                         <div style={styles.card}>
                             <p style={styles.cardTitle}>Manage books</p>

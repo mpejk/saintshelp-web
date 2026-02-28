@@ -134,7 +134,7 @@ export default function Home() {
                     review and activate your account.
                 </p>
 
-                <div style={styles.features}>
+                <div className="landing-features">
                     <div style={styles.featureCard}>
                         <p style={styles.featureTitle}>Verbatim only</p>
                         <p style={styles.featureDesc}>Every result is a direct quote from the source text — nothing invented or summarised.</p>
