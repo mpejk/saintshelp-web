@@ -281,16 +281,18 @@ export async function POST(req: Request) {
             return Response.json({ error: "Select at least one book" }, { status: 400 });
         }
 
-        // Daily quota guard (before any OpenAI calls)
-        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-        const { data: allowed, error: qErr } = await supabaseAdmin.rpc("increment_usage_daily", {
-            p_user_id: auth.user.id,
-            p_date: today,
-            p_limit: 50,
-        });
+        // Daily quota guard — admins are exempt
+        if (!auth.profile.is_admin) {
+            const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+            const { data: allowed, error: qErr } = await supabaseAdmin.rpc("increment_usage_daily", {
+                p_user_id: auth.user.id,
+                p_date: today,
+                p_limit: 50,
+            });
 
-        if (qErr) return Response.json({ error: qErr.message }, { status: 500 });
-        if (!allowed) return Response.json({ error: "Daily limit reached" }, { status: 429 });
+            if (qErr) return Response.json({ error: qErr.message }, { status: 500 });
+            if (!allowed) return Response.json({ error: "Daily limit reached" }, { status: 429 });
+        }
 
         // Resolve/create conversation AND fetch books in parallel
         const [convResult, booksResult] = await Promise.all([
