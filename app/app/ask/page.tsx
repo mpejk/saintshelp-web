@@ -32,6 +32,12 @@ export default function AskPage() {
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [loadingFullId, setLoadingFullId] = useState<string | null>(null);
 
+    const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
+        "What did the desert fathers say about humility?",
+        "What does scripture say about prayer?",
+        "What did the saints say about suffering and patience?",
+    ]);
+
     const chatEndRef = useRef<HTMLDivElement>(null);
     const chatBoxRef = useRef<HTMLDivElement>(null);
     const lastUserMsgRef = useRef<HTMLDivElement>(null);
@@ -41,6 +47,19 @@ export default function AskPage() {
     const LS_SELECTED_KEY = `saintshelp.selected.v1.${userId ?? ""}`;
 
     const [threads, setThreads] = useState<ThreadIndexItem[]>([]);
+
+    async function fetchSuggestedQuestions() {
+        try {
+            const res = await fetch("/api/questions/random");
+            if (!res.ok) return;
+            const json = await res.json().catch(() => null);
+            if (Array.isArray(json?.questions) && json.questions.length > 0) {
+                setSuggestedQuestions(json.questions);
+            }
+        } catch {
+            // keep fallback on network error
+        }
+    }
 
     async function getToken(): Promise<string | null> {
         const { data } = await supabase.auth.getSession();
@@ -174,6 +193,7 @@ export default function AskPage() {
         setConversationTitle(null);
         setChat([]);
         setQuestion("");
+        fetchSuggestedQuestions();
     }
 
     async function deleteThread(id: string) {
@@ -300,6 +320,7 @@ export default function AskPage() {
     // ---------- Mount: load books (also sets userId) ----------
     useEffect(() => {
         loadBooks();
+        fetchSuggestedQuestions();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -546,11 +567,7 @@ export default function AskPage() {
                                     Try asking
                                 </p>
                                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                    {[
-                                        "What did the desert fathers say about humility?",
-                                        "What does scripture say about prayer?",
-                                        "What did the saints say about suffering and patience?",
-                                    ].map((q) => (
+                                    {suggestedQuestions.map((q) => (
                                         <button
                                             key={q}
                                             onClick={() => setQuestion(q)}
