@@ -230,7 +230,6 @@ export default function AskPage() {
         }
 
         setAsking(true);
-        scrollToUserMsg.current = true;
         setChat((c) => [...c, { role: "user", text: q }]);
         setQuestion("");
 
@@ -287,6 +286,8 @@ export default function AskPage() {
         if (json?.conversationId && !conversationId) setConversationId(String(json.conversationId));
         if (json?.conversationTitle) setConversationTitle(String(json.conversationTitle));
 
+        // Scroll so the user's question appears at the top, now that passages are loaded below it
+        scrollToUserMsg.current = true;
         setChat((c) => [...c, { role: "assistant", passages: (json?.passages ?? []) as Passage[] }]);
         setAsking(false);
 
@@ -327,18 +328,38 @@ export default function AskPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selected]);
 
-    // ---------- Scroll: show user's question at top of chat box when submitted ----------
+    // ---------- Scroll: show user's question at top when submitted ----------
     useEffect(() => {
         if (!scrollToUserMsg.current) return;
         scrollToUserMsg.current = false;
-        const box = chatBoxRef.current;
-        const msg = lastUserMsgRef.current;
-        if (!box || !msg) return;
-        // Compute offset of msg relative to the chat box scroll container
-        const boxTop = box.getBoundingClientRect().top;
-        const msgTop = msg.getBoundingClientRect().top;
-        const targetScrollTop = box.scrollTop + (msgTop - boxTop);
-        box.scrollTo({ top: targetScrollTop, behavior: "smooth" });
+
+        // Defer until after React has painted the new message into the DOM
+        requestAnimationFrame(() => {
+            const box = chatBoxRef.current;
+            const msg = lastUserMsgRef.current;
+            if (!box || !msg) return;
+
+            // Use computed overflow-y to distinguish desktop (auto) from mobile (visible)
+            const overflowY = window.getComputedStyle(box).overflowY;
+            const isBoxScrollable = overflowY === "auto" || overflowY === "scroll";
+
+            if (isBoxScrollable) {
+                // Desktop: chat box is the scroll container
+                const boxRect = box.getBoundingClientRect();
+                const msgRect = msg.getBoundingClientRect();
+                const target = box.scrollTop + (msgRect.top - boxRect.top);
+                box.scrollTo({ top: target, behavior: "smooth" });
+            } else {
+                // Mobile: page itself scrolls; account for sticky topbar height
+                const topbar = document.querySelector(".app-topbar") as HTMLElement | null;
+                const topbarH = topbar?.offsetHeight ?? 0;
+                const msgRect = msg.getBoundingClientRect();
+                window.scrollTo({
+                    top: window.scrollY + msgRect.top - topbarH - 8,
+                    behavior: "smooth",
+                });
+            }
+        });
     }, [chat]);
 
     const styles = {
