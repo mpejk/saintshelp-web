@@ -101,13 +101,19 @@ export default function AskPage() {
         const list = (json.books ?? []) as Book[];
         setBooks(list);
 
-        // Restore saved book selection, or default all selected
+        // Restore saved book selection, defaulting any new books to selected
         setSelected(() => {
             try {
                 const raw = localStorage.getItem(`saintshelp.selected.v1.${uid}`);
                 if (raw) {
-                    const parsed = JSON.parse(raw);
-                    if (parsed && typeof parsed === "object") return parsed as Record<string, boolean>;
+                    const saved = JSON.parse(raw) as Record<string, boolean>;
+                    if (saved && typeof saved === "object") {
+                        const merged: Record<string, boolean> = {};
+                        for (const b of list) {
+                            merged[b.id] = b.id in saved ? saved[b.id] : true;
+                        }
+                        return merged;
+                    }
                 }
             } catch {}
             const sel: Record<string, boolean> = {};
