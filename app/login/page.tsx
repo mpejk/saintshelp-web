@@ -13,6 +13,7 @@ export default function LoginPage() {
     const [mode, setMode] = useState<"signin" | "signup">("signin");
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState("");
+    const [confirming, setConfirming] = useState(false);
 
     async function submit() {
         setMsg("");
@@ -43,7 +44,7 @@ export default function LoginPage() {
             if (error) {
                 setMsg(error.message);
             } else {
-                setMsg("Check your email for a confirmation link.");
+                setConfirming(true);
             }
             setLoading(false);
         }
@@ -104,6 +105,31 @@ export default function LoginPage() {
         fontSize: 14,
         cursor: "pointer",
     };
+
+    if (confirming) {
+        return (
+            <div style={pageStyle}>
+                <div style={cardStyle}>
+                    <h2 style={{ margin: 0, fontSize: 18 }}>Validate your email</h2>
+                    <p style={{ marginTop: 12, fontSize: 14, lineHeight: 1.5 }}>
+                        We sent a confirmation link to <b>{email}</b>. Click it to activate your account.
+                    </p>
+                    <div style={{ marginTop: 18 }}>
+                        <button
+                            style={secondaryBtn}
+                            onClick={() => {
+                                setConfirming(false);
+                                setMode("signin");
+                                setMsg("");
+                            }}
+                        >
+                            Back to sign in
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={pageStyle}>

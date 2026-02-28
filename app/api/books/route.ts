@@ -10,7 +10,6 @@ export async function GET(req: Request) {
     const { data, error } = await supabaseAdmin
         .from("books")
         .select("id,title,storage_path,created_at")
-        .eq("owner_user_id", auth.user.id)
         .order("created_at", { ascending: false });
 
     if (error) return Response.json({ error: error.message }, { status: 500 });

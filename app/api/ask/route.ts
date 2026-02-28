@@ -294,7 +294,6 @@ export async function POST(req: Request) {
         const { data: books, error: bErr } = await supabaseAdmin
             .from("books")
             .select("id,title,openai_vector_store_id")
-            .eq("owner_user_id", auth.user.id)
             .in("id", selectedBookIds);
 
         if (bErr) return Response.json({ error: bErr.message }, { status: 500 });

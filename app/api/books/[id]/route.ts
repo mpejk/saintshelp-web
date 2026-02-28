@@ -14,13 +14,16 @@ export async function DELETE(
             return Response.json({ error: auth.error }, { status: auth.status });
         }
 
+        if (!auth.profile.is_admin) {
+            return Response.json({ error: "Admin only" }, { status: 403 });
+        }
+
         const { id: bookId } = await ctx.params;
 
         const { data: book, error } = await supabaseAdmin
             .from("books")
             .select("*")
             .eq("id", bookId)
-            .eq("owner_user_id", auth.user.id)
             .single();
 
         if (error || !book) {

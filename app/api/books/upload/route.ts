@@ -11,6 +11,10 @@ export async function POST(req: Request) {
             return Response.json({ error: auth.error }, { status: auth.status });
         }
 
+        if (!auth.profile.is_admin) {
+            return Response.json({ error: "Admin only" }, { status: 403 });
+        }
+
         const form = await req.formData();
         const file = form.get("file");
         const title = (form.get("title") ?? "").toString().trim();

@@ -23,6 +23,7 @@ export default function BooksPage() {
 
     const [uploading, setUploading] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [isAdmin, setIsAdmin] = useState(false);
 
     async function getAccessToken(): Promise<string | null> {
         const { data } = await supabase.auth.getSession();
@@ -37,8 +38,8 @@ export default function BooksPage() {
             return;
         }
 
-        // quick approval check
-        const { data: me, error: meErr } = await supabase.from("profiles").select("status").single();
+        // quick approval + admin check
+        const { data: me, error: meErr } = await supabase.from("profiles").select("status,is_admin").single();
         if (meErr) {
             setStatus("Error: " + meErr.message);
             return;
@@ -47,6 +48,7 @@ export default function BooksPage() {
             setStatus("Your account is not approved.");
             return;
         }
+        setIsAdmin(!!me?.is_admin);
 
         setStatus("Loading books...");
         const res = await fetch("/api/books", { headers: { Authorization: `Bearer ${token}` } });
@@ -224,8 +226,8 @@ export default function BooksPage() {
             <p style={styles.muted}>{status}</p>
 
             <div style={styles.grid}>
-                {/* Upload */}
-                <div style={styles.card}>
+                {/* Upload — admin only */}
+                {isAdmin && <div style={styles.card}>
                     <p style={styles.cardTitle}>Upload PDF</p>
                     <p style={styles.cardDesc}>Add a book to your library. It will be indexed for semantic search.</p>
 
@@ -278,11 +280,11 @@ export default function BooksPage() {
 
                         {msg && <div style={styles.msg}>{msg}</div>}
                     </div>
-                </div>
+                </div>}
 
                 {/* Library */}
                 <div style={styles.card}>
-                    <p style={styles.cardTitle}>Your library</p>
+                    <p style={styles.cardTitle}>Library</p>
                     <p style={styles.cardDesc}>Manage uploaded books. Deleting removes all associated data.</p>
 
                     {books.length === 0 ? (
@@ -296,16 +298,18 @@ export default function BooksPage() {
                                         <p style={styles.itemMeta}>{new Date(b.created_at).toLocaleString()}</p>
                                     </div>
 
-                                    <button
-                                        style={
-                                            deletingId === b.id ? { ...styles.btn, opacity: 0.6, cursor: "not-allowed" } : styles.btn
-                                        }
-                                        onClick={() => deleteBook(b.id)}
-                                        disabled={deletingId === b.id}
-                                        title="Delete book"
-                                    >
-                                        {deletingId === b.id ? "Deleting…" : "Delete"}
-                                    </button>
+                                    {isAdmin && (
+                                        <button
+                                            style={
+                                                deletingId === b.id ? { ...styles.btn, opacity: 0.6, cursor: "not-allowed" } : styles.btn
+                                            }
+                                            onClick={() => deleteBook(b.id)}
+                                            disabled={deletingId === b.id}
+                                            title="Delete book"
+                                        >
+                                            {deletingId === b.id ? "Deleting…" : "Delete"}
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
