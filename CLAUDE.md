@@ -109,7 +109,20 @@ requests             id, user_id, kind (quota tracking)
 
 All authenticated app pages live under `app/app/` with a shared layout. Pages are pure client components — no server components with data fetching. Auth token is retrieved from Supabase client session before each API call and passed as `Authorization: Bearer <token>`.
 
-No Tailwind is used in components — all styles are inline `React.CSSProperties` objects defined at the top of each component.
+No Tailwind is used in components — all styles are inline `React.CSSProperties` objects defined at the top of each component, computed from the `tc(isDark)` theme palette.
+
+### Light / Dark Theme
+
+`lib/theme.tsx` exports:
+- `ThemeProvider` — wraps the app in `app/layout.tsx`; reads/writes `data-theme` on `<html>` and `saintshelp.theme` in localStorage
+- `useTheme()` — returns `{ isDark, toggle }`
+- `tc(isDark)` — returns a typed palette object (`pageBg`, `cardBg`, `fg`, `fgMuted`, `border`, `btnBg/Fg/Border`, `btnActiveBg/Fg/Border`, `suggestionBg/Border`, `copyActiveBg/Fg`)
+
+An inline `<script>` in `<head>` (in `app/layout.tsx`) applies `data-theme` before React hydrates to prevent flash. All page components call `const { isDark, toggle } = useTheme()` and `const t = tc(isDark)` at the top.
+
+**Variable name caution**: when iterating threads with `.map((t) => ...)`, the iteration variable `t` shadows the outer theme `t`. Use `tc(isDark).propName` explicitly inside such callbacks instead of the outer `t`.
+
+CSS dark mode overrides for class-based sticky elements (`.app-topbar`, `.ask-input-row`) live in `app/globals.css` under `[data-theme="dark"]` selectors.
 
 ### Suggested Questions
 
