@@ -39,7 +39,12 @@ export default function BooksPage() {
         }
 
         // quick approval + admin check
-        const { data: me, error: meErr } = await supabase.from("profiles").select("status,is_admin").single();
+        const { data: { session } } = await supabase.auth.getSession();
+        const { data: me, error: meErr } = await supabase
+            .from("profiles")
+            .select("status,is_admin")
+            .eq("id", session!.user.id)
+            .single();
         if (meErr) {
             setStatus("Error: " + meErr.message);
             return;

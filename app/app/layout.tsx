@@ -124,9 +124,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                                 Home
                             </button>
 
-                            <button style={linkStyle("/app/books")} onClick={() => router.push("/app/books")}>
-                                Books
-                            </button>
+                            {isAdmin && (
+                                <button style={linkStyle("/app/books")} onClick={() => router.push("/app/books")}>
+                                    Books
+                                </button>
+                            )}
 
                             <button style={linkStyle("/app/ask")} onClick={() => router.push("/app/ask")}>
                                 Ask
