@@ -252,6 +252,12 @@ function stripInlineHeaders(s: string): string {
     // Match 2–8 consecutive words repeated immediately after
     t = t.replace(/\b((?:\w+\s+){2,8})\1/g, "$1");
 
+    // PDF running page headers: Title Case phrase ending with a word+pagenumber
+    // concatenation (no space between last word and page number).
+    // e.g., "Introduction to the Devout Life St. Francis of Sales167"
+    // The telltale sign is a lowercase letter immediately followed by 2–4 digits.
+    t = t.replace(/\s+[A-Z][a-zA-Z ,.''-]{4,80}[a-z]\d{2,4}(?=\s|$)/g, " ");
+
     // Collapse stray double-spaces introduced by removals
     t = t.replace(/\s{2,}/g, " ").trim();
 
