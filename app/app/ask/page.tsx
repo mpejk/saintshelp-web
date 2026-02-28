@@ -305,11 +305,11 @@ export default function AskPage() {
     }, [selected]);
 
     const styles = {
-        wrap: { padding: 18 } as const,
-        layout: { display: "flex", gap: 16, alignItems: "flex-start" } as const,
+        wrap: {} as const,
+        layout: {} as const,
         card: { border: "1px solid #efefef", borderRadius: 12, background: "#fff" } as const,
-        aside: { width: 340, padding: 12 } as const,
-        section: { flex: 1 } as const,
+        aside: { padding: 12 } as const,
+        section: {} as const,
         h2: { margin: "0 0 8px 0", fontSize: 14, fontWeight: 650 } as const,
         subhead: { margin: 0, fontSize: 12, opacity: 0.7 } as const,
         btn: {
@@ -351,9 +351,9 @@ export default function AskPage() {
     };
 
     return (
-        <div style={styles.wrap}>
-            <div style={styles.layout}>
-                <aside style={{ ...styles.card, ...styles.aside }}>
+        <div className="ask-wrap">
+            <div className="ask-layout">
+                <aside className="ask-aside" style={{ ...styles.card, ...styles.aside }}>
                     {/* Threads */}
                     <div
                         style={{
@@ -372,7 +372,7 @@ export default function AskPage() {
                     {threads.length === 0 ? (
                         <p style={{ margin: "0 0 12px 0", fontSize: 13, opacity: 0.7 }}>No threads yet.</p>
                     ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                        <div className="ask-threads-list" style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
                             {threads.map((t) => (
                                 <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                     <button
@@ -460,8 +460,8 @@ export default function AskPage() {
                     )}
                 </aside>
 
-                <section style={{ ...styles.card, ...styles.section }}>
-                    <div style={{ padding: 12, minHeight: 520 }}>
+                <section className="ask-main" style={styles.card}>
+                    <div className="ask-chat-box" style={{ padding: 12, minHeight: 520 }}>
                         {loadingThread ? (
                             <div style={{ fontSize: 13, opacity: 0.6, padding: 12 }}>Loading...</div>
                         ) : chat.length === 0 ? (

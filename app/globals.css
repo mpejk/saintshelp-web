@@ -24,3 +24,81 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ===== App layout ===== */
+.app-page {
+  max-width: 1100px;
+  margin: 28px auto;
+  padding: 16px;
+}
+
+.app-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.app-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ===== Ask page ===== */
+.ask-wrap {
+  padding: 18px;
+}
+
+.ask-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.ask-aside {
+  width: 340px;
+  flex-shrink: 0;
+}
+
+.ask-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ===== Mobile (≤ 700px) ===== */
+@media (max-width: 700px) {
+  .app-page {
+    margin: 6px auto;
+    padding: 10px;
+  }
+
+  .app-topbar {
+    margin-bottom: 10px;
+  }
+
+  .ask-wrap {
+    padding: 10px;
+  }
+
+  .ask-layout {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .ask-aside {
+    width: 100%;
+  }
+
+  .ask-threads-list {
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .ask-chat-box {
+    min-height: 300px !important;
+  }
+}
