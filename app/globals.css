@@ -190,6 +190,11 @@ body {
     height: auto;
   }
 
+  /* Prevent iOS auto-zoom on input focus (triggered when font-size < 16px) */
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+
   /* Input bar sticks to bottom of viewport on mobile */
   .ask-input-row {
     position: sticky;
