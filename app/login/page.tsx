@@ -227,6 +227,10 @@ function LoginForm() {
 
     return (
         <div style={pageStyle}>
+            <div style={{ width: "100%", maxWidth: 420 }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+                <img src="/logo.svg" alt="SaintsHelp" style={{ height: 40, width: "auto" }} />
+            </div>
             <div style={cardStyle}>
                 <h2 style={{ margin: 0, fontSize: 18 }}>
                     {mode === "signin" ? "Sign in" : "Sign up"}
@@ -303,6 +307,7 @@ function LoginForm() {
                         </button>
                     </div>
                 )}
+            </div>
             </div>
         </div>
     );
