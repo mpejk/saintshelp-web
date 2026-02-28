@@ -36,12 +36,14 @@ export default function LoginPage() {
             const { error } = await supabase.auth.signUp({
                 email: email.trim(),
                 password,
+                options: {
+                    emailRedirectTo: `${window.location.origin}/auth/callback`,
+                },
             });
             if (error) {
                 setMsg(error.message);
             } else {
-                setMsg("Account created. You can sign in now.");
-                setMode("signin");
+                setMsg("Check your email for a confirmation link.");
             }
             setLoading(false);
         }
