@@ -50,7 +50,7 @@ Supabase Auth handles sign-in/sign-up. Every registered user gets a row in the `
 1. Validates the Bearer JWT via the service role key
 2. Checks `profiles.status === "approved"`
 
-Admin-only routes additionally check `profile.is_admin`. New users sign up, confirm email, then wait for an admin to approve them at `/admin`.
+Admin-only routes additionally check `profile.is_admin`. New users sign up, confirm email, then wait for an admin to approve them at `/admin`. Admins are exempt from the daily ask quota.
 
 ### Two Supabase Clients
 
@@ -77,7 +77,7 @@ Books without `openai_vector_store_id` are silently skipped during search.
 4. Logs the user turn to `conversation_turns`
 5. Searches all selected books **in parallel** via `Promise.all` over `openai.vectorStores.search`
 6. For each result: sanitizes text, extracts a logical unit (numbered saying → paragraph → window), filters TOC/index noise
-7. De-dupes, then selects the **best passage per book** (diversity pass), falling back to fill up to 3 from any book
+7. De-dupes, filters passages below `MIN_SCORE = 0.5`, then selects the **best passage per book** (diversity pass), falling back to fill up to 3 from qualified results only
 8. Logs the assistant turn (stores passages including `full_text`) + request log in parallel
 9. Returns passages **without** `full_text` to the client
 
@@ -86,6 +86,7 @@ Books without `openai_vector_store_id` are silently skipped during search.
 ### Conversation Persistence (DB-backed)
 
 Conversations sync across devices via Supabase:
+- `GET /api/questions/random` — returns 3 random questions from Storage (no auth required)
 - `GET /api/conversations` — list user's threads
 - `GET /api/conversations/[id]` — load messages (strips `full_text` from passages)
 - `DELETE /api/conversations/[id]` — delete thread + all turns
