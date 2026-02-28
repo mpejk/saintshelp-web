@@ -24,5 +24,15 @@ export async function GET(req: Request) {
 
     if (error) return Response.json({ error: error.message }, { status: 500 });
 
-    return Response.json({ users: data ?? [] });
+    // Only show users who have confirmed their email
+    const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+    const confirmedIds = new Set(
+        (authData?.users ?? [])
+            .filter(u => u.email_confirmed_at)
+            .map(u => u.id)
+    );
+
+    const users = (data ?? []).filter(u => confirmedIds.has(u.id));
+
+    return Response.json({ users });
 }
