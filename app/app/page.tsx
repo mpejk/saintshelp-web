@@ -96,7 +96,7 @@ export default function AppHome() {
 
             {profile.status === "pending" && (
                 <p style={styles.note}>
-                    Your account is pending approval. Once approved, you can upload books and ask questions.
+                    Your account is pending approval. Once approved, you can ask questions.
                 </p>
             )}
 
@@ -106,13 +106,15 @@ export default function AppHome() {
 
             {approved && (
                 <div style={styles.grid}>
-                    <div style={styles.card}>
-                        <p style={styles.cardTitle}>Manage books</p>
-                        <p style={styles.cardDesc}>Upload PDFs, delete books, and manage your library.</p>
-                        <button style={styles.btnPrimary} onClick={() => router.push("/app/books")}>
-                            Open Books
-                        </button>
-                    </div>
+                    {profile.is_admin && (
+                        <div style={styles.card}>
+                            <p style={styles.cardTitle}>Manage books</p>
+                            <p style={styles.cardDesc}>Upload PDFs, delete books, and manage your library.</p>
+                            <button style={styles.btnPrimary} onClick={() => router.push("/app/books")}>
+                                Open Books
+                            </button>
+                        </div>
+                    )}
 
                     <div style={styles.card}>
                         <p style={styles.cardTitle}>Ask SaintsHelp</p>

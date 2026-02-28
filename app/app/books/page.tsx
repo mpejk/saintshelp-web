@@ -53,7 +53,11 @@ export default function BooksPage() {
             setStatus("Your account is not approved.");
             return;
         }
-        setIsAdmin(!!me?.is_admin);
+        if (!me?.is_admin) {
+            router.replace("/app/ask");
+            return;
+        }
+        setIsAdmin(true);
 
         setStatus("Loading books...");
         const res = await fetch("/api/books", { headers: { Authorization: `Bearer ${token}` } });
