@@ -33,6 +33,7 @@ export default function AskPage() {
     const [loadingFullId, setLoadingFullId] = useState<string | null>(null);
 
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const chatBoxRef = useRef<HTMLDivElement>(null);
     const lastUserMsgRef = useRef<HTMLDivElement>(null);
     const scrollToUserMsg = useRef(false);
 
@@ -326,12 +327,18 @@ export default function AskPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selected]);
 
-    // ---------- Scroll: show user's question at top when submitted ----------
+    // ---------- Scroll: show user's question at top of chat box when submitted ----------
     useEffect(() => {
-        if (scrollToUserMsg.current) {
-            lastUserMsgRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-            scrollToUserMsg.current = false;
-        }
+        if (!scrollToUserMsg.current) return;
+        scrollToUserMsg.current = false;
+        const box = chatBoxRef.current;
+        const msg = lastUserMsgRef.current;
+        if (!box || !msg) return;
+        // Compute offset of msg relative to the chat box scroll container
+        const boxTop = box.getBoundingClientRect().top;
+        const msgTop = msg.getBoundingClientRect().top;
+        const targetScrollTop = box.scrollTop + (msgTop - boxTop);
+        box.scrollTo({ top: targetScrollTop, behavior: "smooth" });
     }, [chat]);
 
     const styles = {
@@ -501,7 +508,7 @@ export default function AskPage() {
                 </aside>
 
                 <section className="ask-main" style={styles.card}>
-                    <div className="ask-chat-box" style={{ padding: 12 }}>
+                    <div className="ask-chat-box" style={{ padding: 12 }} ref={chatBoxRef}>
                         {loadingThread ? (
                             <div style={{ fontSize: 13, opacity: 0.6, padding: 12 }}>Loading...</div>
                         ) : chat.length === 0 ? (
