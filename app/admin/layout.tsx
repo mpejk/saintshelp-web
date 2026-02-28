@@ -90,7 +90,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         } as const,
         meta: { fontSize: 12, opacity: 0.75 } as const,
         logoWrap: { display: "flex", alignItems: "center", gap: 10, cursor: "pointer" } as const,
-        logo: { height: 34, width: "auto", display: "block" } as const,
+        logo: { height: 34, width: "auto", display: "block", filter: isDark ? "invert(1)" : "none" } as const,
     };
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");

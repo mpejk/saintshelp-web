@@ -201,7 +201,7 @@ function LoginForm() {
                         </button>
                     </div>
                     {msg && (
-                        <div style={{ marginTop: 14, fontSize: 13, color: msgIsError ? "#c0392b" : "#111" }}>
+                        <div style={{ marginTop: 14, fontSize: 13, color: msgIsError ? (isDark ? "#ff6b6b" : "#c0392b") : t.fg }}>
                             {msg}
                         </div>
                     )}
@@ -219,7 +219,7 @@ function LoginForm() {
                     <p style={{ marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
                         We sent a confirmation link to <b>{email}</b>. Click it to verify your address.
                     </p>
-                    <p style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: "#666" }}>
+                    <p style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: t.fgMuted }}>
                         After confirming, your account will be reviewed by an admin before you can sign in.
                         This typically takes a day or two.
                     </p>
@@ -245,7 +245,7 @@ function LoginForm() {
             <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={toggleBtnStyle}>{isDark ? "☀" : "☾"}</button>
             <div style={{ width: "100%", maxWidth: 420 }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-                <img src="/logo.svg" alt="SaintsHelp" style={{ height: 40, width: "auto" }} />
+                <img src="/logo.svg" alt="SaintsHelp" style={{ height: 40, width: "auto", filter: isDark ? "invert(1)" : "none" }} />
             </div>
             <div style={cardStyle}>
                 <h2 style={{ margin: 0, fontSize: 18 }}>
@@ -308,7 +308,7 @@ function LoginForm() {
                 </div>
 
                 {msg && (
-                    <div style={{ marginTop: 14, fontSize: 13, color: msgIsError ? "#c0392b" : "#111" }}>
+                    <div style={{ marginTop: 14, fontSize: 13, color: msgIsError ? (isDark ? "#ff6b6b" : "#c0392b") : t.fg }}>
                         {msg}
                     </div>
                 )}

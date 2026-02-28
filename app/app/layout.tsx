@@ -93,6 +93,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             height: 34,
             width: "auto",
             display: "block",
+            filter: isDark ? "invert(1)" : "none",
         } as const,
     };
 

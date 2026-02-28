@@ -38,6 +38,7 @@ export default function Home() {
         logo: {
             height: 44,
             marginBottom: 28,
+            filter: isDark ? "invert(1)" : "none",
         },
         h1: {
             fontSize: 30,
