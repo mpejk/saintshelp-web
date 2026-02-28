@@ -207,6 +207,57 @@ function dewrapPdfLines(s: string) {
     return s.trim();
 }
 
+/**
+ * Pre-dewrap: remove lines that are clearly chapter/section/book headings.
+ * Without this they get merged into prose by dewrapPdfLines.
+ */
+function stripHeaderLines(s: string): string {
+    return s
+        .split("\n")
+        .filter((line) => {
+            const t = line.trim();
+            if (!t) return true; // keep paragraph breaks
+
+            // "CHAPTER IX." / "CHAPTER 7" / "BOOK III" / "PART ONE" / "SECTION 2"
+            if (/^(CHAPTER|BOOK|PART|SECTION)\s+([IVXLCDM]+|\d+|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)\b/i.test(t)) return false;
+
+            // "The Seventh Chapter ..." / "The Third Book ..."
+            if (/^[Tt]he\s+\w+\s+(Chapter|Book|Part)\b/i.test(t)) return false;
+
+            // Very short ALL-CAPS lines (≤ 5 words) that look like heading labels
+            if (/^[A-Z][A-Z\s]{2,40}$/.test(t) && t.split(/\s+/).length <= 5) return false;
+
+            return true;
+        })
+        .join("\n");
+}
+
+/**
+ * Post-dewrap: strip chapter/section markers and duplicate phrases that
+ * got embedded in prose after line-collapsing.
+ */
+function stripInlineHeaders(s: string): string {
+    let t = s;
+
+    // "CHAPTER IX." / "CHAPTER IX. On Gentleness towards Ourselves." embedded mid-prose
+    t = t.replace(
+        /\s+(?:CHAPTER|BOOK|PART|SECTION)\s+(?:[IVXLCDM]+|\d+|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)\b\.?(?:\s+[A-Z][^.!?]{0,80}[.!?])?/g,
+        " "
+    );
+
+    // "The Seventh Chapter [Title text]" mid-prose
+    t = t.replace(/\s+[Tt]he\s+\w+\s+(?:Chapter|Book|Part)\b(?:\s+[A-Z][^.!?]{0,80}[.!?])?/g, " ");
+
+    // Consecutive duplicate phrase: "Unbridled Affections Unbridled Affections"
+    // Match 2–8 consecutive words repeated immediately after
+    t = t.replace(/\b((?:\w+\s+){2,8})\1/g, "$1");
+
+    // Collapse stray double-spaces introduced by removals
+    t = t.replace(/\s{2,}/g, " ").trim();
+
+    return t;
+}
+
 export async function POST(req: Request) {
     try {
         const auth = await requireApprovedUser(req);
@@ -312,7 +363,7 @@ export async function POST(req: Request) {
 
                     if (!rawText) continue;
 
-                    const cleanedChunk = sanitizeText(rawText);
+                    const cleanedChunk = stripHeaderLines(sanitizeText(rawText));
                     if (!cleanedChunk) continue;
 
                     const unit = extractLogicalUnit(cleanedChunk, terms);
@@ -320,8 +371,8 @@ export async function POST(req: Request) {
                     let fullText = stripLikelyHeaderFooterLines(sanitizeText(unit.full));
                     let previewText = stripLikelyHeaderFooterLines(sanitizeText(unit.preview));
 
-                    fullText = dewrapPdfLines(fullText);
-                    previewText = dewrapPdfLines(previewText);
+                    fullText = stripInlineHeaders(dewrapPdfLines(fullText));
+                    previewText = stripInlineHeaders(dewrapPdfLines(previewText));
 
                     if (looksLikeTOCOrIndex(fullText) || looksLikeTOCOrIndex(previewText)) continue;
                     if (fullText.length < 60 || previewText.length < 40) continue;
