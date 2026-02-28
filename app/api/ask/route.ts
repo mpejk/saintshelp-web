@@ -411,7 +411,7 @@ export async function POST(req: Request) {
 
         // Drop low-relevance passages — better to return fewer results than irrelevant ones.
         // Threshold tuned against OpenAI vector store cosine similarity scores.
-        const MIN_SCORE = 0.3;
+        const MIN_SCORE = 0.5;
         const qualified = ordered.filter((p) => (p.score ?? 0) >= MIN_SCORE);
 
         // Diversity pass: pick the best-scoring passage per book from qualified results only.
