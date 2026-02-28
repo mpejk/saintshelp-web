@@ -616,7 +616,7 @@ export default function AskPage() {
                         )}
                     </div>
 
-                    <div style={{ display: "flex", gap: 10, padding: 12, borderTop: "1px solid #efefef" }}>
+                    <div className="ask-input-row" style={{ display: "flex", gap: 10, padding: 12, borderTop: "1px solid #efefef" }}>
                         <input
                             value={question}
                             onChange={(e) => setQuestion(e.target.value)}

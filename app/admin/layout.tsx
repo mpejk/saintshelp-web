@@ -56,20 +56,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     const styles = {
         page: {
-            maxWidth: 1100,
-            margin: "28px auto",
-            padding: 16,
             fontFamily:
                 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"',
             color: "#111",
         } as const,
-        topbar: {
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 16,
-        } as const,
-        nav: { display: "flex", gap: 8, alignItems: "center" } as const,
+        nav: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const } as const,
         btn: {
             border: "1px solid #d9d9d9",
             background: "#fff",
@@ -100,16 +91,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
     const linkStyle = (href: string) => (isActive(href) ? styles.btnActive : styles.btn);
 
-    if (loading) return <main style={styles.page}>Loading…</main>;
+    if (loading) return <main className="app-page" style={styles.page}>Loading…</main>;
 
     return (
-        <main style={styles.page}>
-            <div style={styles.topbar}>
+        <main className="app-page" style={styles.page}>
+            <div className="app-topbar">
                 <div style={styles.logoWrap} onClick={() => router.push("/app")} role="button">
                     <img src="/logo.svg" alt="SaintsHelp" style={styles.logo} />
                 </div>
 
-                <div style={styles.nav}>
+                <div className="app-nav" style={styles.nav}>
                     <button style={linkStyle("/app")} onClick={() => router.push("/app")}>
                         Home
                     </button>
@@ -131,7 +122,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </div>
             </div>
 
-            <div style={styles.content}>{children}</div>
+            <div className="app-content" style={styles.content}>{children}</div>
         </main>
     );
 }
