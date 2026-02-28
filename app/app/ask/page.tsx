@@ -27,14 +27,13 @@ export default function AskPage() {
     const [conversationTitle, setConversationTitle] = useState<string | null>(null);
 
     const [asking, setAsking] = useState(false);
+    const [userId, setUserId] = useState<string | null>(null);
 
-    // Existing single-state persistence (keep it; harmless)
-    const LS_KEY = "saintshelp.ask.state.v1";
-
-    // Thread persistence (this is what fixes #2)
-    const LS_INDEX = "saintshelp_threads_v1"; // array of { id, title, updatedAt }
-    const LS_THREAD_PREFIX = "saintshelp_thread_v1:"; // + conversationId
-    const LS_LAST_THREAD = "saintshelp_last_thread_v1";
+    // All keys namespaced by userId so accounts never share data
+    const LS_KEY = `saintshelp.ask.state.v1.${userId ?? ""}`;
+    const LS_INDEX = `saintshelp_threads_v1.${userId ?? ""}`;
+    const LS_THREAD_PREFIX = `saintshelp_thread_v1.${userId ?? ""}:`;
+    const LS_LAST_THREAD = `saintshelp_last_thread_v1.${userId ?? ""}`;
 
     const [threads, setThreads] = useState<ThreadIndexItem[]>([]);
 
@@ -117,11 +116,14 @@ export default function AskPage() {
     }
 
     async function loadBooks() {
-        const token = await getToken();
-        if (!token) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const session = sessionData.session;
+        if (!session) {
             router.push("/login");
             return;
         }
+        setUserId(session.user.id);
+        const token = session.access_token;
 
         const res = await fetch("/api/books", { headers: { Authorization: `Bearer ${token}` } });
         const text = await res.text();
@@ -315,9 +317,15 @@ export default function AskPage() {
         setAsking(false);
     }
 
-    // ---------- Mount: load books + restore last thread ----------
+    // ---------- Mount: load books (also sets userId) ----------
     useEffect(() => {
         loadBooks();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // ---------- Once userId is known: restore last thread from namespaced storage ----------
+    useEffect(() => {
+        if (!userId) return;
 
         // 1) Load thread index
         const idx = loadIndex().sort((a, b) => b.updatedAt - a.updatedAt);
@@ -330,7 +338,6 @@ export default function AskPage() {
         if (pickedId) {
             openThread(pickedId);
         } else {
-            // fallback to old single-state storage (kept for backwards compatibility)
             const s = loadState();
             if (s) {
                 if (typeof s.conversationId === "string" || s.conversationId === null) setConversationId(s.conversationId);
@@ -340,11 +347,12 @@ export default function AskPage() {
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [userId]);
 
     // ---------- Persist: thread + thread index + old LS_KEY ----------
     useEffect(() => {
         if (typeof window === "undefined") return;
+        if (!userId) return;
 
         // keep old state persistence (unchanged)
         saveState();
