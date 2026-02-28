@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useRouter } from "next/navigation";
+import { useTheme, tc } from "@/lib/theme";
 
 type Book = {
     id: string;
@@ -14,6 +15,8 @@ type Book = {
 export default function BooksPage() {
     const supabase = useMemo(() => supabaseBrowser(), []);
     const router = useRouter();
+    const { isDark } = useTheme();
+    const t = tc(isDark);
 
     const [status, setStatus] = useState<string>("Loading...");
     const [books, setBooks] = useState<Book[]>([]);
@@ -38,7 +41,6 @@ export default function BooksPage() {
             return;
         }
 
-        // quick approval + admin check
         const { data: { session } } = await supabase.auth.getSession();
         const { data: me, error: meErr } = await supabase
             .from("profiles")
@@ -96,7 +98,6 @@ export default function BooksPage() {
         fd.append("file", file);
 
         setUploading(true);
-        // NOTE: do NOT set msg to "Uploading..." (it was shown twice: msg + button)
         setMsg("");
 
         const res = await fetch("/api/books/upload", {
@@ -145,8 +146,8 @@ export default function BooksPage() {
         });
 
         if (!res.ok) {
-            const t = await res.text();
-            setMsg("Delete failed: " + t);
+            const body = await res.text();
+            setMsg("Delete failed: " + body);
             setDeletingId(null);
             return;
         }
@@ -164,33 +165,39 @@ export default function BooksPage() {
         wrap: { padding: 18 } as const,
         h1: { margin: 0, fontSize: 18, fontWeight: 650, letterSpacing: -0.2 } as const,
         muted: { margin: "6px 0 0 0", fontSize: 13, opacity: 0.75 } as const,
-        grid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 } as const,
-        card: { border: "1px solid #efefef", borderRadius: 12, padding: 14, background: "#fafafa" } as const,
+        card: {
+            border: `1px solid ${t.border}`,
+            borderRadius: 12,
+            padding: 14,
+            background: t.cardBg,
+        } as const,
         cardTitle: { margin: 0, fontSize: 14, fontWeight: 650 } as const,
         cardDesc: { margin: "6px 0 12px 0", fontSize: 13, opacity: 0.8, lineHeight: 1.35 } as const,
         label: { display: "block", fontSize: 12, opacity: 0.75, marginBottom: 6 } as const,
         input: {
             width: "100%",
-            border: "1px solid #d9d9d9",
+            border: `1px solid ${t.borderInput}`,
             borderRadius: 10,
             padding: "10px 12px",
             fontSize: 14,
             outline: "none",
-            background: "#fff",
+            background: t.inputBg,
+            color: t.fg,
         } as const,
         row: { display: "flex", gap: 10, alignItems: "center" } as const,
         btn: {
-            border: "1px solid #d9d9d9",
-            background: "#fff",
+            border: `1px solid ${t.btnBorder}`,
+            background: t.btnBg,
+            color: t.btnFg,
             borderRadius: 10,
             padding: "8px 10px",
             fontSize: 13,
             cursor: "pointer",
         } as const,
         btnPrimary: {
-            border: "1px solid #111",
-            background: "#111",
-            color: "#fff",
+            border: `1px solid ${t.btnActiveBorder}`,
+            background: t.btnActiveBg,
+            color: t.btnActiveFg,
             borderRadius: 10,
             padding: "8px 12px",
             fontSize: 13,
@@ -199,10 +206,10 @@ export default function BooksPage() {
         msg: { marginTop: 10, fontSize: 13, opacity: 0.85 } as const,
         list: { marginTop: 12, display: "flex", flexDirection: "column", gap: 8 } as const,
         item: {
-            border: "1px solid #efefef",
+            border: `1px solid ${t.border}`,
             borderRadius: 12,
             padding: 12,
-            background: "#fff",
+            background: t.cardBg,
             display: "flex",
             justifyContent: "space-between",
             gap: 12,
@@ -210,8 +217,6 @@ export default function BooksPage() {
         } as const,
         itemTitle: { margin: 0, fontSize: 14, fontWeight: 600, lineHeight: 1.2 } as const,
         itemMeta: { margin: "4px 0 0 0", fontSize: 12, opacity: 0.7 } as const,
-
-        // NEW styles for a nice file picker
         fileRow: { display: "flex", alignItems: "center", gap: 10 } as const,
         fileBtn: {
             display: "inline-flex",
@@ -219,14 +224,15 @@ export default function BooksPage() {
             justifyContent: "center",
             padding: "8px 10px",
             borderRadius: 10,
-            border: "1px solid #d9d9d9",
-            background: "#fff",
+            border: `1px solid ${t.btnBorder}`,
+            background: t.btnBg,
+            color: t.btnFg,
             cursor: "pointer",
             fontSize: 13,
-            userSelect: "none",
-            whiteSpace: "nowrap",
+            userSelect: "none" as const,
+            whiteSpace: "nowrap" as const,
         } as const,
-        fileName: { fontSize: 13, opacity: 0.85, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const,
+        fileName: { fontSize: 13, opacity: 0.85, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const } as const,
     };
 
     return (
@@ -235,7 +241,6 @@ export default function BooksPage() {
             <p style={styles.muted}>{status}</p>
 
             <div className="books-grid">
-                {/* Upload — admin only */}
                 {isAdmin && <div style={styles.card}>
                     <p style={styles.cardTitle}>Upload PDF</p>
                     <p style={styles.cardDesc}>Add a book to your library. It will be indexed for semantic search.</p>
@@ -291,7 +296,6 @@ export default function BooksPage() {
                     </div>
                 </div>}
 
-                {/* Library */}
                 <div style={styles.card}>
                     <p style={styles.cardTitle}>Library</p>
                     <p style={styles.cardDesc}>Manage uploaded books. Deleting removes all associated data.</p>

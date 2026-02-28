@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { useTheme, tc } from "@/lib/theme";
 
 type UserRow = {
     id: string;
@@ -13,6 +14,8 @@ type UserRow = {
 
 export default function AdminPage() {
     const supabase = useMemo(() => supabaseBrowser(), []);
+    const { isDark } = useTheme();
+    const t = tc(isDark);
 
     const [users, setUsers] = useState<UserRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -87,46 +90,44 @@ export default function AdminPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const badgeBg = (s: string) => {
+        if (s === "approved") return isDark ? "#1a2e1c" : "#f0fff4";
+        if (s === "blocked") return isDark ? "#2e1a1a" : "#fff5f5";
+        return t.cardBg;
+    };
+
     const styles = {
         wrap: { padding: 18 } as const,
         h1: { margin: 0, fontSize: 18, fontWeight: 650, letterSpacing: -0.2 } as const,
         muted: { margin: "8px 0 0 0", fontSize: 13, opacity: 0.75 } as const,
-        error: { marginTop: 10, color: "#b00020", fontSize: 13 } as const,
-        table: { width: "100%", borderCollapse: "collapse", marginTop: 14 } as const,
+        error: { marginTop: 10, color: isDark ? "#ff6b6b" : "#b00020", fontSize: 13 } as const,
+        table: { width: "100%", borderCollapse: "collapse" as const, marginTop: 14 } as const,
         th: {
-            textAlign: "left",
+            textAlign: "left" as const,
             fontSize: 12,
             opacity: 0.7,
             padding: "10px 8px",
-            borderBottom: "1px solid #eee",
+            borderBottom: `1px solid ${t.border}`,
         } as const,
         td: {
             padding: "10px 8px",
-            borderBottom: "1px solid #f1f1f1",
+            borderBottom: `1px solid ${t.border}`,
             fontSize: 13,
-            verticalAlign: "middle",
+            verticalAlign: "middle" as const,
         } as const,
-        badge: (s: string) =>
-        ({
-            display: "inline-block",
-            padding: "3px 8px",
-            borderRadius: 999,
-            fontSize: 12,
-            border: "1px solid #ddd",
-            background: s === "approved" ? "#f0fff4" : s === "blocked" ? "#fff5f5" : "#fafafa",
-        } as const),
         btn: {
-            border: "1px solid #d9d9d9",
-            background: "#fff",
+            border: `1px solid ${t.btnBorder}`,
+            background: t.btnBg,
+            color: t.btnFg,
             borderRadius: 10,
             padding: "6px 10px",
             fontSize: 12,
             cursor: "pointer",
         } as const,
         btnPrimary: {
-            border: "1px solid #111",
-            background: "#111",
-            color: "#fff",
+            border: `1px solid ${t.btnActiveBorder}`,
+            background: t.btnActiveBg,
+            color: t.btnActiveFg,
             borderRadius: 10,
             padding: "6px 10px",
             fontSize: 12,
@@ -160,7 +161,14 @@ export default function AdminPage() {
                             <tr key={u.id}>
                                 <td style={styles.td}>{u.email ?? "(no email)"}</td>
                                 <td style={styles.td}>
-                                    <span style={styles.badge(u.status)}>{u.status}</span>
+                                    <span style={{
+                                        display: "inline-block",
+                                        padding: "3px 8px",
+                                        borderRadius: 999,
+                                        fontSize: 12,
+                                        border: `1px solid ${t.border}`,
+                                        background: badgeBg(u.status),
+                                    }}>{u.status}</span>
                                 </td>
                                 <td style={styles.td}>{u.is_admin ? "yes" : "no"}</td>
                                 <td style={styles.td}>

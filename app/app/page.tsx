@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useRouter } from "next/navigation";
+import { useTheme, tc } from "@/lib/theme";
 
 type Profile = {
     status: "pending" | "approved" | "blocked";
@@ -13,6 +14,8 @@ type Profile = {
 export default function AppHome() {
     const supabase = useMemo(() => supabaseBrowser(), []);
     const router = useRouter();
+    const { isDark } = useTheme();
+    const t = tc(isDark);
 
     const [profile, setProfile] = useState<Profile | null>(null);
     const [err, setErr] = useState<string>("");
@@ -52,29 +55,23 @@ export default function AppHome() {
             alignItems: "center",
             padding: "6px 10px",
             borderRadius: 999,
-            border: "1px solid #efefef",
-            background: "#fafafa",
+            border: `1px solid ${t.border}`,
+            background: t.cardBg,
             fontSize: 12,
             marginTop: 12,
         } as const,
-        grid: {
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 12,
-            marginTop: 16,
-        } as const,
         card: {
-            border: "1px solid #efefef",
+            border: `1px solid ${t.border}`,
             borderRadius: 12,
             padding: 14,
-            background: "#fafafa",
+            background: t.cardBg,
         } as const,
         cardTitle: { margin: 0, fontSize: 14, fontWeight: 650 } as const,
         cardDesc: { margin: "6px 0 10px 0", fontSize: 13, opacity: 0.8, lineHeight: 1.35 } as const,
         btnPrimary: {
-            border: "1px solid #111",
-            background: "#111",
-            color: "#fff",
+            border: `1px solid ${t.btnActiveBorder}`,
+            background: t.btnActiveBg,
+            color: t.btnActiveFg,
             borderRadius: 10,
             padding: "8px 12px",
             fontSize: 13,
