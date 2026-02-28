@@ -431,6 +431,10 @@ export default function AskPage() {
                         </button>
                     </div>
 
+                    <p style={{ margin: "0 0 10px 0", fontSize: 11, opacity: 0.5, lineHeight: 1.4 }}>
+                        Conversations are saved in this browser only.
+                    </p>
+
                     {threads.length === 0 ? (
                         <p style={{ margin: "0 0 12px 0", fontSize: 13, opacity: 0.7 }}>No threads yet.</p>
                     ) : (
@@ -478,7 +482,7 @@ export default function AskPage() {
 
                     {/* Books */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <h2 style={styles.h2}>Books</h2>
+                        <h2 style={styles.h2}>Search in</h2>
                         <div style={{ fontSize: 12, opacity: 0.7 }}>{status}</div>
                     </div>
 

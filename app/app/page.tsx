@@ -85,10 +85,7 @@ export default function AppHome() {
 
     return (
         <div style={styles.wrap}>
-            <h1 style={styles.h1}>Account</h1>
-            <p style={styles.muted}>
-                Signed in as <b>{profile.email ?? "(unknown)"}</b>
-            </p>
+            <h1 style={styles.h1}>Home</h1>
 
             <div style={styles.pill}>
                 Status: <b style={{ textTransform: "capitalize" }}>{profile.status}</b>

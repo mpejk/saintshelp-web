@@ -20,12 +20,16 @@ function LoginForm() {
     }, [searchParams]);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState("");
+    const [msgIsError, setMsgIsError] = useState(false);
     const [confirming, setConfirming] = useState(false);
+    const [resetting, setResetting] = useState(false);
+    const [resetSent, setResetSent] = useState(false);
 
     async function submit() {
         setMsg("");
-        if (!email.trim()) return setMsg("Enter email.");
-        if (!password) return setMsg("Enter password.");
+        setMsgIsError(false);
+        if (!email.trim()) { setMsg("Enter email."); setMsgIsError(true); return; }
+        if (!password) { setMsg("Enter password."); setMsgIsError(true); return; }
 
         setLoading(true);
 
@@ -36,6 +40,7 @@ function LoginForm() {
             });
             if (error) {
                 setMsg(error.message);
+                setMsgIsError(true);
                 setLoading(false);
                 return;
             }
@@ -50,10 +55,28 @@ function LoginForm() {
             });
             if (error) {
                 setMsg(error.message);
+                setMsgIsError(true);
             } else {
                 setConfirming(true);
             }
             setLoading(false);
+        }
+    }
+
+    async function sendReset() {
+        setMsg("");
+        setMsgIsError(false);
+        if (!email.trim()) { setMsg("Enter your email address first."); setMsgIsError(true); return; }
+        setLoading(true);
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+            redirectTo: `${window.location.origin}/auth/callback`,
+        });
+        setLoading(false);
+        if (error) {
+            setMsg(error.message);
+            setMsgIsError(true);
+        } else {
+            setResetSent(true);
         }
     }
 
@@ -112,6 +135,66 @@ function LoginForm() {
         fontSize: 14,
         cursor: "pointer",
     };
+
+    if (resetSent) {
+        return (
+            <div style={pageStyle}>
+                <div style={cardStyle}>
+                    <h2 style={{ margin: 0, fontSize: 18 }}>Check your email</h2>
+                    <p style={{ marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
+                        We sent a password reset link to <b>{email}</b>. Click it to set a new password.
+                    </p>
+                    <div style={{ marginTop: 18 }}>
+                        <button
+                            style={secondaryBtn}
+                            onClick={() => {
+                                setResetting(false);
+                                setResetSent(false);
+                                setMsg("");
+                            }}
+                        >
+                            Back to sign in
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (resetting) {
+        return (
+            <div style={pageStyle}>
+                <div style={cardStyle}>
+                    <h2 style={{ margin: 0, fontSize: 18 }}>Reset password</h2>
+                    <div style={{ marginTop: 16 }}>
+                        <label style={{ fontSize: 12 }}>Email</label>
+                        <input
+                            style={inputStyle}
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            autoComplete="email"
+                        />
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+                        <button style={primaryBtn} onClick={sendReset} disabled={loading}>
+                            {loading ? "Sending…" : "Send reset link"}
+                        </button>
+                        <button
+                            style={secondaryBtn}
+                            onClick={() => { setResetting(false); setMsg(""); }}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                    {msg && (
+                        <div style={{ marginTop: 14, fontSize: 13, color: msgIsError ? "#c0392b" : "#111" }}>
+                            {msg}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
 
     if (confirming) {
         return (
@@ -205,8 +288,19 @@ function LoginForm() {
                 </div>
 
                 {msg && (
-                    <div style={{ marginTop: 14, fontSize: 13 }}>
+                    <div style={{ marginTop: 14, fontSize: 13, color: msgIsError ? "#c0392b" : "#111" }}>
                         {msg}
+                    </div>
+                )}
+
+                {mode === "signin" && (
+                    <div style={{ marginTop: 14 }}>
+                        <button
+                            style={{ background: "none", border: "none", padding: 0, fontSize: 13, color: "#555", cursor: "pointer", textDecoration: "underline" }}
+                            onClick={() => { setResetting(true); setMsg(""); }}
+                        >
+                            Forgot password?
+                        </button>
                     </div>
                 )}
             </div>

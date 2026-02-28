@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  title: "SaintsHelp",
   description: "Citation-only AI engine",
 };
 
