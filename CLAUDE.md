@@ -20,11 +20,15 @@ curl -X POST "https://<SUPABASE_URL>/auth/v1/token?grant_type=password" \
   -d '{"email":"...","password":"..."}'
 ```
 
-Deploy to production:
+Deploy to production (always alias BOTH domains — www redirects to non-www so both must point to the same deployment):
 ```bash
-npx vercel --prod --yes
+npx vercel build
+npx vercel deploy --prebuilt   # captures the deployment URL
 npx vercel alias <deployment-url> saintshelp.com
+npx vercel alias <deployment-url> www.saintshelp.com
 ```
+
+Use `vercel build` + `vercel deploy --prebuilt` (not `vercel --prod`) to bypass Vercel's remote Turbopack cache which can serve stale chunks.
 
 ## Environment Variables
 
@@ -73,7 +77,7 @@ Books without `openai_vector_store_id` are silently skipped during search.
 4. Logs the user turn to `conversation_turns`
 5. Searches all selected books **in parallel** via `Promise.all` over `openai.vectorStores.search`
 6. For each result: sanitizes text, extracts a logical unit (numbered saying → paragraph → window), filters TOC/index noise
-7. De-dupes and sorts by relevance score
+7. De-dupes, then selects the **best passage per book** (diversity pass), falling back to fill up to 3 from any book
 8. Logs the assistant turn (stores passages including `full_text`) + request log in parallel
 9. Returns passages **without** `full_text` to the client
 
@@ -105,3 +109,13 @@ requests             id, user_id, kind (quota tracking)
 All authenticated app pages live under `app/app/` with a shared layout. Pages are pure client components — no server components with data fetching. Auth token is retrieved from Supabase client session before each API call and passed as `Authorization: Bearer <token>`.
 
 No Tailwind is used in components — all styles are inline `React.CSSProperties` objects defined at the top of each component.
+
+### Suggested Questions
+
+30 generic suggested questions are stored as `config/questions.json` in a private Supabase Storage bucket. `GET /api/questions/random` downloads the file and returns 3 randomly sampled questions. To update the questions, upload a new JSON file: `{ "questions": ["..."] }` to the `config` bucket with `x-upsert: true` — no redeploy needed.
+
+### Key Constraints
+
+- Supabase keys use the new `sb_secret_` / `sb_publishable_` format — these are **not** JWTs and do not work as PostgreSQL passwords or with the Supabase Management API (which requires a Personal Access Token starting with `sbp_`). DDL must be run in the Supabase dashboard SQL editor.
+- `next.config.ts` sets `generateBuildId: async () => \`build-\${Date.now()}\`` to force unique static asset paths on each deploy, preventing CDN stale-chunk issues.
+- Mobile scroll uses `overflow-x: clip` (not `hidden`) on `html, body` — `overflow-x: hidden` implicitly creates a scroll container which breaks `position: sticky` and `window.scrollTo`.
