@@ -525,7 +525,42 @@ export default function AskPage() {
                 <section style={{ ...styles.card, ...styles.section }}>
                     <div style={{ padding: 12, minHeight: 520 }}>
                         {chat.length === 0 ? (
-                            <p style={{ margin: 0, fontSize: 14, opacity: 0.8 }}>SaintsHelp responds with verbatim quotes only.</p>
+                            <div>
+                                <p style={{ margin: "0 0 6px 0", fontSize: 14, fontWeight: 600 }}>
+                                    How it works
+                                </p>
+                                <p style={{ margin: "0 0 20px 0", fontSize: 13, opacity: 0.75, lineHeight: 1.6 }}>
+                                    Type a question and SaintsHelp will search the selected books for relevant passages,
+                                    returning the exact words from the source — no paraphrasing, no AI-generated answers.
+                                </p>
+                                <p style={{ margin: "0 0 10px 0", fontSize: 12, opacity: 0.5, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                    Try asking
+                                </p>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                    {[
+                                        "What did the desert fathers say about humility?",
+                                        "What does scripture say about prayer?",
+                                        "What did the saints say about suffering and patience?",
+                                    ].map((q) => (
+                                        <button
+                                            key={q}
+                                            onClick={() => setQuestion(q)}
+                                            style={{
+                                                textAlign: "left",
+                                                fontSize: 13,
+                                                background: "#fafafa",
+                                                border: "1px solid #efefef",
+                                                borderRadius: 10,
+                                                padding: "9px 12px",
+                                                cursor: "pointer",
+                                                lineHeight: 1.4,
+                                            }}
+                                        >
+                                            {q}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                                 {chat.map((m, idx) => (

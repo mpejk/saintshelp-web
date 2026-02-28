@@ -95,9 +95,13 @@ export default function AppHome() {
             </div>
 
             {profile.status === "pending" && (
-                <p style={styles.note}>
-                    Your account is pending approval. Once approved, you can ask questions.
-                </p>
+                <div style={{ ...styles.note, lineHeight: 1.65 }}>
+                    <b>Your account is pending admin approval.</b>
+                    <br />
+                    This is a manual review — you will be able to use SaintsHelp once an admin
+                    activates your account. This typically takes a day or two. You can check
+                    back here at any time to see your status.
+                </div>
             )}
 
             {profile.status === "blocked" && (

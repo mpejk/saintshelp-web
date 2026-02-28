@@ -1,16 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { Suspense } from "react";
 
-export default function LoginPage() {
+function LoginForm() {
     const supabase = useMemo(() => supabaseBrowser(), []);
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [mode, setMode] = useState<"signin" | "signup">("signin");
+
+    // Open directly in signup mode if ?mode=signup is in the URL
+    useEffect(() => {
+        if (searchParams.get("mode") === "signup") setMode("signup");
+    }, [searchParams]);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState("");
     const [confirming, setConfirming] = useState(false);
@@ -110,9 +117,13 @@ export default function LoginPage() {
         return (
             <div style={pageStyle}>
                 <div style={cardStyle}>
-                    <h2 style={{ margin: 0, fontSize: 18 }}>Validate your email</h2>
-                    <p style={{ marginTop: 12, fontSize: 14, lineHeight: 1.5 }}>
-                        We sent a confirmation link to <b>{email}</b>. Click it to activate your account.
+                    <h2 style={{ margin: 0, fontSize: 18 }}>Check your email</h2>
+                    <p style={{ marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
+                        We sent a confirmation link to <b>{email}</b>. Click it to verify your address.
+                    </p>
+                    <p style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: "#666" }}>
+                        After confirming, your account will be reviewed by an admin before you can sign in.
+                        This typically takes a day or two.
                     </p>
                     <div style={{ marginTop: 18 }}>
                         <button
@@ -200,5 +211,13 @@ export default function LoginPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense>
+            <LoginForm />
+        </Suspense>
     );
 }
