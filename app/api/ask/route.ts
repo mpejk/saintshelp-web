@@ -406,20 +406,25 @@ export async function POST(req: Request) {
             return true;
         });
 
-        // Sort by relevance score (highest first) — no LLM reranking needed
+        // Sort by relevance score (highest first)
         const ordered = deduped.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
-        // Diversity pass: pick the best-scoring passage per book first,
-        // then fill remaining slots with next-best passages from any book.
-        const perBook = new Map<string, typeof ordered[0]>();
-        for (const p of ordered) {
+        // Drop low-relevance passages — better to return fewer results than irrelevant ones.
+        // Threshold tuned against OpenAI vector store cosine similarity scores.
+        const MIN_SCORE = 0.3;
+        const qualified = ordered.filter((p) => (p.score ?? 0) >= MIN_SCORE);
+
+        // Diversity pass: pick the best-scoring passage per book from qualified results only.
+        // No fill-up with below-threshold passages.
+        const perBook = new Map<string, typeof qualified[0]>();
+        for (const p of qualified) {
             if (!perBook.has(p.book_id)) perBook.set(p.book_id, p);
         }
         const topPerBook = [...perBook.values()].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
         const diverse = topPerBook.slice(0, 3);
         if (diverse.length < 3) {
             const usedTexts = new Set(diverse.map((p) => p.text));
-            for (const p of ordered) {
+            for (const p of qualified) {
                 if (diverse.length >= 3) break;
                 if (!usedTexts.has(p.text)) { usedTexts.add(p.text); diverse.push(p); }
             }
