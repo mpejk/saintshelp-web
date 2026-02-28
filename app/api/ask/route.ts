@@ -409,7 +409,23 @@ export async function POST(req: Request) {
         // Sort by relevance score (highest first) — no LLM reranking needed
         const ordered = deduped.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
-        const storedPassages = ordered.slice(0, 3).map((p: any) => ({
+        // Diversity pass: pick the best-scoring passage per book first,
+        // then fill remaining slots with next-best passages from any book.
+        const perBook = new Map<string, typeof ordered[0]>();
+        for (const p of ordered) {
+            if (!perBook.has(p.book_id)) perBook.set(p.book_id, p);
+        }
+        const topPerBook = [...perBook.values()].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        const diverse = topPerBook.slice(0, 3);
+        if (diverse.length < 3) {
+            const usedTexts = new Set(diverse.map((p) => p.text));
+            for (const p of ordered) {
+                if (diverse.length >= 3) break;
+                if (!usedTexts.has(p.text)) { usedTexts.add(p.text); diverse.push(p); }
+            }
+        }
+
+        const storedPassages = diverse.slice(0, 3).map((p: any) => ({
             id: crypto.randomUUID(),
             book_id: p.book_id,
             book_title: p.book_title,
