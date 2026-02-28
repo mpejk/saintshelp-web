@@ -140,9 +140,11 @@ body {
   }
 
   /* On mobile: natural scroll, sticky topbar + sticky input */
-  /* Allow html/body to grow with content so window.scrollTo works */
+  /* overflow-x: clip (not hidden) so html/body don't become scroll containers,
+     which would break position:sticky and window.scrollTo */
   html, body {
     height: auto;
+    overflow-x: clip;
   }
 
   .app-page {
