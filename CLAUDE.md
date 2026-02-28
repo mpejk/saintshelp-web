@@ -120,9 +120,13 @@ No Tailwind is used in components — all styles are inline `React.CSSProperties
 
 An inline `<script>` in `<head>` (in `app/layout.tsx`) applies `data-theme` before React hydrates to prevent flash. All page components call `const { isDark, toggle } = useTheme()` and `const t = tc(isDark)` at the top.
 
-**Variable name caution**: when iterating threads with `.map((t) => ...)`, the iteration variable `t` shadows the outer theme `t`. Use `tc(isDark).propName` explicitly inside such callbacks instead of the outer `t`.
+**Variable name caution**: when iterating with `.map((t) => ...)`, the iteration variable `t` shadows the outer theme `t`. Use `tc(isDark).propName` explicitly inside such callbacks instead of the outer `t`. Same applies to any local `const t = ...` inside event handlers.
 
-CSS dark mode overrides for class-based sticky elements (`.app-topbar`, `.ask-input-row`) live in `app/globals.css` under `[data-theme="dark"]` selectors.
+**Logo**: the SVG (`/public/logo.svg`) has hardcoded `fill="#000000"`. Make it theme-aware by adding `filter: isDark ? "invert(1)" : "none"` to the `<img>` style. Applied in all 4 logo locations: app topbar, admin topbar, landing page, login page.
+
+CSS dark mode overrides for class-based sticky elements (`.app-topbar`, `.ask-input-row`) live in `app/globals.css` under `[data-theme="dark"]` selectors. These are needed because sticky elements sit on top of the page background and need an explicit background color.
+
+**All inner pages** (`app/app/page.tsx`, `app/app/books/page.tsx`, `app/admin/page.tsx`) must also use `tc(isDark)` — they are not covered by the layout's theme since inline styles don't inherit.
 
 ### Suggested Questions
 
