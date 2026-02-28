@@ -140,6 +140,11 @@ body {
   }
 
   /* On mobile: natural scroll, sticky topbar + sticky input */
+  /* Allow html/body to grow with content so window.scrollTo works */
+  html, body {
+    height: auto;
+  }
+
   .app-page {
     height: auto;
     min-height: 100dvh;

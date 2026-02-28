@@ -230,6 +230,7 @@ export default function AskPage() {
         }
 
         setAsking(true);
+        scrollToUserMsg.current = true;
         setChat((c) => [...c, { role: "user", text: q }]);
         setQuestion("");
 
