@@ -38,6 +38,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 OPENAI_API_KEY=
+VOYAGE_API_KEY=
 ```
 
 ## Architecture
@@ -57,16 +58,29 @@ Admin-only routes additionally check `profile.is_admin`. New users sign up, conf
 - `lib/supabaseAdmin.ts` — service role key, bypasses RLS, used in all API routes
 - `lib/supabaseBrowser.ts` — anon key singleton, used in client components for auth only
 
+### Embedding & Chunking Libraries
+
+- `lib/voyage.ts` — Voyage AI client: `embedQuery(text)` returns 1024-dim vector, `embedTexts(texts[])` batches at 128 per call (voyage-3-lite model)
+- `lib/chunker.ts` — `extractTextFromPdf(buffer)` via pdf-parse, `chunkText(text, size=800, overlap=200)` splits at paragraph boundaries
+
 ### Book Indexing (Upload Flow)
 
-`POST /api/books/upload` (admin only):
-1. Stores the PDF in Supabase Storage (`books` bucket)
-2. Inserts a row in the `books` table
-3. Creates an OpenAI vector store for the book
-4. Uploads the PDF as an OpenAI file and attaches it to the vector store via `createAndPoll` (waits for indexing to complete)
-5. Saves `openai_vector_store_id` and `openai_file_id` back to the `books` row
+Books are indexed using **Voyage AI embeddings** stored in Supabase **pgvector**.
 
-Books without `openai_vector_store_id` are silently skipped during search.
+**Single upload** — `POST /api/books/upload` (admin only):
+1. Stores the PDF in Supabase Storage (`books` bucket)
+2. Inserts a row in the `books` table with `indexing_status: 'pending'`
+3. Extracts text via `pdf-parse`, chunks it (800 chars, 200 overlap at paragraph boundaries)
+4. Embeds chunks via Voyage AI (`voyage-3-lite`, 1024 dims) in batches of 128
+5. Inserts embeddings into `book_chunks` table, sets `indexing_status: 'ready'`
+
+**Batch upload** — 4-step client-orchestrated flow (each step <10s for Vercel free tier):
+1. `POST /api/books/upload-batch` — stores up to 10 PDFs, inserts DB rows, returns immediately
+2. `POST /api/books/chunk` — per book: download PDF, extract text, chunk, store raw chunks (no embeddings yet)
+3. `POST /api/books/embed-batch` — per book: embed a batch of un-embedded chunks (50 at a time), client calls repeatedly
+4. `POST /api/books/finalize` — per book: verify all chunks embedded, set `indexing_status: 'ready'`
+
+Only books with `indexing_status = 'ready'` are searched.
 
 ### Ask / Search Flow
 
@@ -75,11 +89,12 @@ Books without `openai_vector_store_id` are silently skipped during search.
 2. Resolves or creates a `conversations` row
 3. In parallel: fetches book metadata + resolves conversation
 4. Logs the user turn to `conversation_turns`
-5. Searches all selected books **in parallel** via `Promise.all` over `openai.vectorStores.search`
-6. For each result: sanitizes text, extracts a logical unit (numbered saying → paragraph → window), filters TOC/index noise
-7. De-dupes, filters passages below `MIN_SCORE = 0.5`, then selects the **best passage per book** (diversity pass), falling back to fill up to 3 from qualified results only
-8. Logs the assistant turn (stores passages including `full_text`) + request log in parallel
-9. Returns passages **without** `full_text` to the client
+5. Embeds the question via Voyage AI (`embedQuery`) — **one API call**
+6. Searches via `supabaseAdmin.rpc("search_chunks", ...)` — **one SQL query** regardless of book count
+7. For each result: sanitizes text, extracts a logical unit (numbered saying → paragraph → window), filters TOC/index noise
+8. De-dupes, filters passages below `MIN_SCORE = 0.4`, then selects the **best passage per book** (diversity pass), falling back to fill up to 3 from qualified results only
+9. Logs the assistant turn (stores passages including `full_text`) + request log in parallel
+10. Returns passages **without** `full_text` to the client
 
 `full_text` is only returned via `POST /api/passages/full` when the user clicks "Show full saying".
 
@@ -97,13 +112,32 @@ The frontend (`app/app/ask/page.tsx`) loads threads from the DB on mount. Book s
 
 ```
 profiles             id, email, status, is_admin
-books                id, title, storage_path, openai_vector_store_id, openai_file_id
+books                id, title, storage_path, openai_vector_store_id, openai_file_id,
+                     indexing_status (pending|chunking|embedding|ready|failed), indexing_error, chunk_count
+book_chunks          id, book_id, chunk_index, chunk_text, embedding (vector 1024), created_at
+topics               id, name, display_order, created_at
+book_topics          book_id, topic_id (many-to-many)
 conversations        id, user_id, title, created_at
 conversation_turns   id, conversation_id, role, question, selected_book_ids, answer_passages, created_at
 requests             id, user_id, kind (quota tracking)
 ```
 
+SQL function `search_chunks(query_embedding, book_ids, match_count, similarity_threshold)` performs the pgvector similarity search.
+
 `answer_passages` is JSONB: `{ passages: [{ id, book_id, book_title, score, text, full_text }] }`. The `full_text` stored server-side is used by `/api/passages/full`; clients only see `text` (truncated preview).
+
+### Topics & Book Browsing
+
+- `GET/POST /api/topics` — list/create topics (admin only for POST)
+- `DELETE /api/topics/[id]` — delete topic (admin only)
+- `POST /api/books/[id]/topics` — assign topic IDs to a book (admin only)
+
+The books page (`app/app/books/page.tsx`) is open to **all approved users**:
+- Admin section (upload + topic management) shown only to admins
+- Book browsing: search bar, topic filter pills, checkboxes for book selection
+- Selection persisted in localStorage (same `saintshelp.selected.v1.<userId>` key)
+
+The ask page sidebar shows a compact summary ("Selected: 12/87 books") with a "Manage Books" link instead of the full checkbox list.
 
 ### Frontend Structure
 
