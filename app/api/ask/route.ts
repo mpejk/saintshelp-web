@@ -106,6 +106,11 @@ function dewrapPdfLines(s: string) {
     s = s.replace(/\n(?!\n)/g, " ");
     s = s.replace(/[ \t]+/g, " ");
     s = s.replace(/\n\n+/g, "\n\n");
+    // Rejoin PDF hyphenation ("cor- rupts" → "corrupts")
+    s = s.replace(/(\w)- (\w)/g, "$1$2");
+    // Strip editorial bracket markers ("[2]", "[ 2 1 1]", "[ 2 1 1" unclosed)
+    s = s.replace(/\[\s*\d+(?:\s+\d+)*\s*\]?/g, "");
+    s = s.replace(/\s{2,}/g, " ");
     return s.trim();
 }
 
@@ -128,6 +133,85 @@ function stripInlineHeaders(s: string): string {
     t = t.replace(/\s+[A-Z][a-zA-Z ,.''-]{4,80}[a-z]\d{2,4}(?=\s|$)/g, " ");
     t = t.replace(/\s{2,}/g, " ").trim();
     return t;
+}
+
+/** Strip PDF page markers like "-- 68 of 157 --" */
+function stripPageMarkers(s: string): string {
+    return s.replace(/--\s*\d+\s+of\s+\d+\s*--/g, "");
+}
+
+/** Strip author/title header lines (tab-separated, e.g. "St. Francis of Sales\tIntroduction...") */
+function stripAuthorTitleLines(s: string): string {
+    return s.split("\n").filter((line) => {
+        return !/\t/.test(line.trim());
+    }).join("\n");
+}
+
+/** Strip footnote reference lines (numbered Bible refs, editorial notes) */
+function stripFootnoteLines(s: string): string {
+    return s.split("\n").filter((line) => {
+        const t = line.trim();
+        if (!t) return true;
+        // Numbered footnotes: "66 1 Cor. iv. 7." or "69 Islands in the Persian Gulf."
+        if (/^\d{1,3}\s+\S/.test(t) && t.length < 80) return false;
+        // Editorial footnotes: "* 10 is an addition from..."
+        if (/^\*\s*\d/.test(t)) return false;
+        return true;
+    }).join("\n");
+}
+
+/** Trim leading word fragments from chunk boundaries */
+function trimLeadingFragment(s: string): string {
+    if (!s) return s;
+    // If starts with a capital letter, quote, or number — already a good boundary
+    if (/^[A-Z"'\u2018\u201C\u201D(\d]/.test(s)) return s;
+    // If starts with 1-3 lowercase chars then space — word fragment, strip it
+    const fragMatch = s.match(/^[a-z]{1,3}\s+/);
+    if (fragMatch) {
+        s = s.slice(fragMatch[0].length);
+    }
+    // If still starts lowercase (mid-sentence), try to find next sentence start
+    if (/^[a-z]/.test(s)) {
+        // Look for opening quote
+        const quoteIdx = s.search(/['"'\u2018\u201C]/);
+        if (quoteIdx >= 0 && quoteIdx < 60) return s.slice(quoteIdx);
+        // Look for sentence start (capital after period/question/exclamation)
+        const sentIdx = s.search(/[.!?]\s+[A-Z]/);
+        if (sentIdx >= 0 && sentIdx < 120) return s.slice(sentIdx + 2);
+        // No good boundary found — prepend ellipsis to signal excerpt
+        return "…" + s;
+    }
+    return s;
+}
+
+/** Trim trailing fragments — incomplete sentences or lone heading words at the end */
+function trimTrailingFragment(s: string): string {
+    if (!s) return s;
+    // Strip trailing single capitalized word (likely a heading from next section)
+    s = s.replace(/\s+[A-Z][a-z]+$/, "");
+    // If text ends mid-sentence (no terminal punctuation), trim to last sentence end
+    const trimmed = s.trim();
+    if (trimmed && !/[.!?'"\u2019\u201D)]$/.test(trimmed)) {
+        const lastEnd = Math.max(
+            trimmed.lastIndexOf(". "),
+            trimmed.lastIndexOf(".' "),
+            trimmed.lastIndexOf("? "),
+            trimmed.lastIndexOf("! "),
+            trimmed.lastIndexOf(".\u201D"),
+            trimmed.lastIndexOf(".\""),
+        );
+        // Also check terminal punctuation at very end (no trailing space)
+        const lastTerminal = Math.max(
+            trimmed.lastIndexOf("."),
+            trimmed.lastIndexOf("?"),
+            trimmed.lastIndexOf("!"),
+        );
+        const best = Math.max(lastEnd, lastTerminal);
+        if (best > trimmed.length * 0.4) {
+            return trimmed.slice(0, best + 1).trim();
+        }
+    }
+    return trimmed;
 }
 
 export async function POST(req: Request) {
@@ -214,13 +298,23 @@ export async function POST(req: Request) {
             const rawText = r.chunk_text ?? "";
             if (!rawText) continue;
 
-            const cleanedChunk = stripHeaderLines(sanitizeText(rawText));
+            // Strip PDF artifacts from raw chunk BEFORE extracting logical unit
+            let cleanedChunk = sanitizeText(rawText);
+            cleanedChunk = stripPageMarkers(cleanedChunk);
+            cleanedChunk = stripAuthorTitleLines(cleanedChunk);
+            cleanedChunk = stripFootnoteLines(cleanedChunk);
+            cleanedChunk = stripHeaderLines(cleanedChunk);
+            cleanedChunk = stripLikelyHeaderFooterLines(cleanedChunk);
+            cleanedChunk = cleanedChunk.replace(/\n{3,}/g, "\n\n").trim();
             if (!cleanedChunk) continue;
+
             const unit = extractLogicalUnit(cleanedChunk, terms);
             let fullText = stripLikelyHeaderFooterLines(sanitizeText(unit.full));
             let previewText = stripLikelyHeaderFooterLines(sanitizeText(unit.preview));
             fullText = stripInlineHeaders(dewrapPdfLines(fullText));
             previewText = stripInlineHeaders(dewrapPdfLines(previewText));
+            fullText = trimTrailingFragment(trimLeadingFragment(fullText));
+            previewText = trimTrailingFragment(trimLeadingFragment(previewText));
             if (looksLikeTOCOrIndex(fullText) || looksLikeTOCOrIndex(previewText)) continue;
             if (fullText.length < 60 || previewText.length < 40) continue;
 
