@@ -37,7 +37,6 @@ Required in `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-OPENAI_API_KEY=
 VOYAGE_API_KEY=
 ```
 
@@ -60,7 +59,7 @@ Admin-only routes additionally check `profile.is_admin`. New users sign up, conf
 
 ### Embedding & Chunking Libraries
 
-- `lib/voyage.ts` — Voyage AI client: `embedQuery(text)` returns 1024-dim vector, `embedTexts(texts[])` batches at 128 per call (voyage-3-lite model)
+- `lib/voyage.ts` — Voyage AI client: `embedQuery(text)` returns 1024-dim vector, `embedTexts(texts[])` batches at 128 per call (voyage-3 model)
 - `lib/chunker.ts` — `extractTextFromPdf(buffer)` via pdf-parse, `chunkText(text, size=800, overlap=200)` splits at paragraph boundaries
 
 ### Book Indexing (Upload Flow)
@@ -71,14 +70,14 @@ Books are indexed using **Voyage AI embeddings** stored in Supabase **pgvector**
 1. Stores the PDF in Supabase Storage (`books` bucket)
 2. Inserts a row in the `books` table with `indexing_status: 'pending'`
 3. Extracts text via `pdf-parse`, chunks it (800 chars, 200 overlap at paragraph boundaries)
-4. Embeds chunks via Voyage AI (`voyage-3-lite`, 1024 dims) in batches of 128
+4. Embeds chunks via Voyage AI (`voyage-3`, 1024 dims) in batches of 128
 5. Inserts embeddings into `book_chunks` table, sets `indexing_status: 'ready'`
 
-**Batch upload** — 4-step client-orchestrated flow (each step <10s for Vercel free tier):
+**Batch upload** — 2-step client-orchestrated flow:
 1. `POST /api/books/upload-batch` — stores up to 10 PDFs, inserts DB rows, returns immediately
-2. `POST /api/books/chunk` — per book: download PDF, extract text, chunk, store raw chunks (no embeddings yet)
-3. `POST /api/books/embed-batch` — per book: embed a batch of un-embedded chunks (50 at a time), client calls repeatedly
-4. `POST /api/books/finalize` — per book: verify all chunks embedded, set `indexing_status: 'ready'`
+2. `POST /api/books/chunk` — per book: download PDF, extract text, chunk, embed via Voyage AI, insert with embeddings, set `indexing_status: 'ready'`
+
+**Re-index** — `POST /api/books/reindex` (admin only): deletes existing chunks, re-downloads PDF, chunks, embeds, and re-inserts.
 
 Only books with `indexing_status = 'ready'` are searched.
 
@@ -92,7 +91,7 @@ Only books with `indexing_status = 'ready'` are searched.
 5. Embeds the question via Voyage AI (`embedQuery`) — **one API call**
 6. Searches via `supabaseAdmin.rpc("search_chunks", ...)` — **one SQL query** regardless of book count
 7. For each result: sanitizes text, extracts a logical unit (numbered saying → paragraph → window), filters TOC/index noise
-8. De-dupes, filters passages below `MIN_SCORE = 0.4`, then selects the **best passage per book** (diversity pass), falling back to fill up to 3 from qualified results only
+8. De-dupes, filters passages below `MIN_SCORE = 0.3`, then selects the **best passage per book** (diversity pass), falling back to fill up to 3 from qualified results only
 9. Logs the assistant turn (stores passages including `full_text`) + request log in parallel
 10. Returns passages **without** `full_text` to the client
 

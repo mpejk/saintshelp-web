@@ -171,12 +171,6 @@ export default function AskPage() {
             .map(([k]) => k);
     }
 
-    function selectAll(on: boolean) {
-        const sel: Record<string, boolean> = {};
-        for (const b of books) sel[b.id] = on;
-        setSelected(sel);
-    }
-
     async function openThread(id: string) {
         setLoadingThread(true);
         setConversationId(id);
@@ -518,43 +512,23 @@ export default function AskPage() {
                         <div style={{ fontSize: 12, opacity: 0.7 }}>{status}</div>
                     </div>
 
-                    {books.length === 0 ? (
-                        <p style={{ margin: 0, fontSize: 13, opacity: 0.8 }}>No books. Upload one first.</p>
-                    ) : (
-                        <>
-                            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                                <button style={styles.btn} onClick={() => selectAll(true)}>
-                                    Select all
-                                </button>
-                                <button style={styles.btn} onClick={() => selectAll(false)}>
-                                    None
-                                </button>
-                            </div>
+                    {books.length > 0 && (
+                        <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
+                            Selected: {selectedIds().length}/{books.length} books
+                        </div>
+                    )}
+                    <button
+                        style={styles.btn}
+                        onClick={() => router.push("/app/books")}
+                    >
+                        Manage Books
+                    </button>
 
-                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                {books.map((b) => (
-                                    <label key={b.id} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13 }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!selected[b.id]}
-                                            onChange={(e) => setSelected((s) => ({ ...s, [b.id]: e.target.checked }))}
-                                        />
-                                        <span style={{ lineHeight: 1.25 }}>{b.title}</span>
-                                    </label>
-                                ))}
-                            </div>
-
-                            <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
-                                Selected: {selectedIds().length}/{books.length}
-                            </div>
-
-                            {conversationTitle && (
-                                <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${t.border}` }}>
-                                    <div style={styles.subhead}>Conversation</div>
-                                    <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.3 }}>{conversationTitle}</div>
-                                </div>
-                            )}
-                        </>
+                    {conversationTitle && (
+                        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${t.border}` }}>
+                            <div style={styles.subhead}>Conversation</div>
+                            <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.3 }}>{conversationTitle}</div>
+                        </div>
                     )}
                 </aside>
 
@@ -634,8 +608,8 @@ export default function AskPage() {
 
                                                             <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
                                                                 {(() => {
-                                                                    const t = (p.text ?? "").trimEnd();
-                                                                    return t.endsWith("…") || t.endsWith("...");
+                                                                    const trimmed = (p.text ?? "").trimEnd();
+                                                                    return trimmed.endsWith("…") || trimmed.endsWith("...");
                                                                 })() && (
                                                                         <button
                                                                             disabled={loadingFullId === p.id}
