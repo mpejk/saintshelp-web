@@ -7,10 +7,17 @@ export async function GET(req: Request) {
     const auth = await requireApprovedUser(req);
     if (!auth.ok) return Response.json({ error: auth.error }, { status: auth.status });
 
-    const { data, error } = await supabaseAdmin
+    const url = new URL(req.url);
+    const language = url.searchParams.get("language");
+
+    let query = supabaseAdmin
         .from("books")
-        .select("id,title,storage_path,created_at,indexing_status,chunk_count")
+        .select("id,title,storage_path,created_at,indexing_status,chunk_count,language")
         .order("created_at", { ascending: false });
+
+    if (language) query = query.eq("language", language);
+
+    const { data, error } = await query;
 
     if (error) return Response.json({ error: error.message }, { status: 500 });
 

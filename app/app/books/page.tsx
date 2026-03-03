@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useRouter } from "next/navigation";
 import { useTheme, tc } from "@/lib/theme";
+import { useLocale } from "@/lib/i18n";
 
 type Book = {
     id: string;
@@ -22,6 +23,7 @@ export default function BooksPage() {
     const router = useRouter();
     const { isDark } = useTheme();
     const t = tc(isDark);
+    const { locale, t: tr } = useLocale();
 
     const [status, setStatus] = useState<string>("Loading...");
     const [books, setBooks] = useState<Book[]>([]);
@@ -38,8 +40,8 @@ export default function BooksPage() {
     const [search, setSearch] = useState("");
     const [activeTopic, setActiveTopic] = useState<string | null>(null);
 
-    // Book selection for search
-    const LS_SELECTED_KEY = `saintshelp.selected.v1.${userId ?? ""}`;
+    // Book selection for search (per-language)
+    const LS_SELECTED_KEY = `saintshelp.selected.v1.${userId ?? ""}.${locale}`;
     const [selected, setSelected] = useState<Record<string, boolean>>({});
 
     // Topic management
@@ -66,9 +68,9 @@ export default function BooksPage() {
 
         setIsAdmin(!!me?.is_admin);
 
-        setStatus("Loading books...");
+        setStatus(tr("loading"));
         const [booksRes, topicsRes] = await Promise.all([
-            fetch("/api/books", { headers: { Authorization: `Bearer ${token}` } }),
+            fetch(`/api/books?language=${locale}`, { headers: { Authorization: `Bearer ${token}` } }),
             fetch("/api/topics", { headers: { Authorization: `Bearer ${token}` } }),
         ]);
 
@@ -81,10 +83,16 @@ export default function BooksPage() {
         setBooks(list);
         setTopics((topicsJson?.topics ?? []) as Topic[]);
 
-        // Restore saved book selection
+        // Restore saved book selection (per-language key)
         setSelected(() => {
+            const newKey = `saintshelp.selected.v1.${uid}.${locale}`;
             try {
-                const raw = localStorage.getItem(`saintshelp.selected.v1.${uid}`);
+                let raw = localStorage.getItem(newKey);
+                // Migrate: if new key doesn't exist, copy from old key for English
+                if (!raw && locale === "en") {
+                    const oldKey = `saintshelp.selected.v1.${uid}`;
+                    raw = localStorage.getItem(oldKey);
+                }
                 if (raw) {
                     const saved = JSON.parse(raw) as Record<string, boolean>;
                     if (saved && typeof saved === "object") {
@@ -105,8 +113,8 @@ export default function BooksPage() {
     async function upload() {
         setMsg("");
         if (uploading) return;
-        if (!title.trim()) return setMsg("Enter a title.");
-        if (!file) return setMsg("Choose a PDF file.");
+        if (!title.trim()) return setMsg(tr("booksUploadLabel"));
+        if (!file) return setMsg(tr("booksChooseFile"));
 
         const token = await getAccessToken();
         if (!token) { router.push("/login"); return; }
@@ -114,9 +122,10 @@ export default function BooksPage() {
         const fd = new FormData();
         fd.append("title", title.trim());
         fd.append("file", file);
+        fd.append("language", locale);
 
         setUploading(true);
-        setMsg("Uploading and indexing...");
+        setMsg(tr("booksUploadingAndIndexing"));
 
         const res = await fetch("/api/books/upload", {
             method: "POST",
@@ -134,7 +143,7 @@ export default function BooksPage() {
 
         setTitle("");
         setFile(null);
-        setMsg("Uploaded and indexed successfully.");
+        setMsg(tr("booksUploadedSuccess"));
         setUploading(false);
         await loadBooks();
     }
@@ -236,7 +245,7 @@ export default function BooksPage() {
         setSelected((s) => ({ ...s, ...sel }));
     }
 
-    useEffect(() => { loadBooks(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => { loadBooks(); }, [locale]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Persist selection
     useEffect(() => {
@@ -351,42 +360,73 @@ export default function BooksPage() {
     return (
         <div style={styles.wrap}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-                <h1 style={styles.h1}>Books</h1>
+                <h1 style={styles.h1}>{tr("booksTitle")}</h1>
                 <div style={{ fontSize: 13, opacity: 0.7 }}>
-                    {status !== "Ready" ? status : `Selected: ${selectedCount}/${books.length}`}
+                    {status !== "Ready" ? status : tr("booksSelected", { count: String(selectedCount), total: String(books.length) })}
                 </div>
             </div>
+
+            {locale === "hr" && tr("croatianNotice") && (
+                <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, fontSize: 13, background: isDark ? "#1a2a2e" : "#f0f8ff", border: `1px solid ${t.border}` }}>
+                    {tr("croatianNotice")}
+                </div>
+            )}
 
             {/* Search + topic filters */}
             <div style={{ marginTop: 14 }}>
                 <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search books..."
+                    placeholder={tr("booksSearchPlaceholder")}
                     style={{ ...styles.input, marginBottom: 10 }}
                 />
 
                 {topics.length > 0 && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                        <button style={styles.pill(!activeTopic)} onClick={() => setActiveTopic(null)}>All</button>
+                        <button style={styles.pill(!activeTopic)} onClick={() => setActiveTopic(null)}>{tr("booksAll")}</button>
                         {topics.map((tp) => (
-                            <button key={tp.id} style={styles.pill(activeTopic === tp.id)} onClick={() => setActiveTopic(activeTopic === tp.id ? null : tp.id)}>
-                                {tp.name}
-                            </button>
+                            <div key={tp.id} style={{ display: "inline-flex", gap: 0 }}>
+                                <button
+                                    style={{ ...styles.pill(activeTopic === tp.id), borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                                    onClick={() => setActiveTopic(activeTopic === tp.id ? null : tp.id)}
+                                >
+                                    {tp.name}
+                                </button>
+                                <button
+                                    title={`${tr("booksSelect")} ${tp.name}`}
+                                    style={{
+                                        ...styles.pill(false),
+                                        borderTopLeftRadius: 0,
+                                        borderBottomLeftRadius: 0,
+                                        borderLeft: "none",
+                                        padding: "5px 8px",
+                                        fontSize: 11,
+                                        opacity: 0.7,
+                                    }}
+                                    onClick={() => {
+                                        const topicBookIds = new Set(books.filter((b) => (b.topic_ids ?? []).includes(tp.id)).map((b) => b.id));
+                                        const sel: Record<string, boolean> = {};
+                                        for (const b of books) sel[b.id] = topicBookIds.has(b.id);
+                                        setSelected(sel);
+                                    }}
+                                >
+                                    {tr("booksSelect")}
+                                </button>
+                            </div>
                         ))}
                     </div>
                 )}
 
                 <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                    <button style={styles.btn} onClick={() => selectAll(true)}>Select all</button>
-                    <button style={styles.btn} onClick={() => selectAll(false)}>None</button>
+                    <button style={styles.btn} onClick={() => selectAll(true)}>{tr("booksSelectAll")}</button>
+                    <button style={styles.btn} onClick={() => selectAll(false)}>{tr("booksNone")}</button>
                 </div>
             </div>
 
             {/* Book list */}
             {filteredBooks.length === 0 ? (
                 <div style={{ fontSize: 13, opacity: 0.8, marginTop: 8 }}>
-                    {books.length === 0 ? "No books yet." : "No books match your filters."}
+                    {books.length === 0 ? tr("booksNoBooks") : tr("booksNoMatch")}
                 </div>
             ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -403,7 +443,7 @@ export default function BooksPage() {
                                         <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.2 }}>{b.title}</span>
                                         <span style={statusBadge(b.indexing_status ?? "pending")}>{b.indexing_status ?? "pending"}</span>
                                         {b.chunk_count != null && b.indexing_status === "ready" && (
-                                            <span style={{ fontSize: 11, opacity: 0.6 }}>{b.chunk_count} chunks</span>
+                                            <span style={{ fontSize: 11, opacity: 0.6 }}>{tr("booksChunks", { count: String(b.chunk_count) })}</span>
                                         )}
                                     </div>
                                     {isAdmin && topics.length > 0 && (
@@ -430,7 +470,7 @@ export default function BooksPage() {
                                         onClick={() => deleteBook(b.id)}
                                         disabled={deletingId === b.id}
                                     >
-                                        {deletingId === b.id ? "Deleting…" : "Delete"}
+                                        {deletingId === b.id ? tr("booksDeleting") : tr("delete")}
                                     </button>
                                 )}
                             </div>
@@ -443,25 +483,25 @@ export default function BooksPage() {
             {isAdmin && (
                 <div className="books-grid" style={{ marginTop: 20 }}>
                     <div style={styles.card}>
-                        <p style={styles.cardTitle}>Upload PDF</p>
-                        <p style={styles.cardDesc}>Add a book. It will be chunked and indexed for semantic search.</p>
+                        <p style={styles.cardTitle}>{tr("booksUploadTitle")}</p>
+                        <p style={styles.cardDesc}>{tr("booksUploadDesc")}</p>
 
                         <div style={{ marginBottom: 10 }}>
-                            <label style={styles.label}>Title</label>
+                            <label style={styles.label}>{tr("booksUploadLabel")}</label>
                             <input
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
                                 style={styles.input}
-                                placeholder='e.g. "Confessions (Augustine)"'
+                                placeholder={tr("booksUploadPlaceholder")}
                                 disabled={uploading}
                             />
                         </div>
 
                         <div style={{ marginBottom: 12 }}>
-                            <label style={styles.label}>PDF</label>
+                            <label style={styles.label}>{tr("booksUploadPdf")}</label>
                             <div style={styles.fileRow}>
                                 <label style={uploading ? { ...styles.fileBtn, opacity: 0.6, cursor: "not-allowed" } : styles.fileBtn}>
-                                    Choose file
+                                    {tr("booksChooseFile")}
                                     <input
                                         type="file"
                                         accept="application/pdf"
@@ -471,7 +511,7 @@ export default function BooksPage() {
                                     />
                                 </label>
                                 <div style={{ ...styles.fileName, flex: 1 }}>
-                                    {file ? file.name : "No file selected"}
+                                    {file ? file.name : tr("booksNoFile")}
                                 </div>
                             </div>
                         </div>
@@ -482,15 +522,15 @@ export default function BooksPage() {
                                 onClick={upload}
                                 disabled={uploading}
                             >
-                                {uploading ? "Uploading…" : "Upload"}
+                                {uploading ? tr("booksUploading") : tr("booksUpload")}
                             </button>
                             {msg && <div style={styles.msg}>{msg}</div>}
                         </div>
                     </div>
 
                     <div style={styles.card}>
-                        <p style={styles.cardTitle}>Topics</p>
-                        <p style={styles.cardDesc}>Manage topics to categorize books.</p>
+                        <p style={styles.cardTitle}>{tr("booksTopicsTitle")}</p>
+                        <p style={styles.cardDesc}>{tr("booksTopicsDesc")}</p>
 
                         {topics.length > 0 && (
                             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
@@ -498,7 +538,7 @@ export default function BooksPage() {
                                     <div key={tp.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                                         <span style={{ fontSize: 13 }}>{tp.name}</span>
                                         <button style={{ ...styles.btn, padding: "4px 8px", fontSize: 12 }} onClick={() => deleteTopic(tp.id)}>
-                                            Delete
+                                            {tr("delete")}
                                         </button>
                                     </div>
                                 ))}
@@ -509,11 +549,11 @@ export default function BooksPage() {
                             <input
                                 value={newTopicName}
                                 onChange={(e) => setNewTopicName(e.target.value)}
-                                placeholder="New topic name"
+                                placeholder={tr("booksNewTopicPlaceholder")}
                                 style={{ ...styles.input, flex: 1 }}
                                 onKeyDown={(e) => { if (e.key === "Enter") createTopic(); }}
                             />
-                            <button style={styles.btn} onClick={createTopic}>Add</button>
+                            <button style={styles.btn} onClick={createTopic}>{tr("booksAddTopic")}</button>
                         </div>
                     </div>
                 </div>

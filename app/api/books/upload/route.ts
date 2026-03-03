@@ -14,6 +14,7 @@ export async function POST(req: Request) {
         const form = await req.formData();
         const file = form.get("file");
         const title = (form.get("title") ?? "").toString().trim();
+        const language = (form.get("language") ?? "en").toString().trim();
 
         if (!file || !(file instanceof File)) return Response.json({ error: "Missing file" }, { status: 400 });
         if (!title) return Response.json({ error: "Missing title" }, { status: 400 });
@@ -29,8 +30,8 @@ export async function POST(req: Request) {
         if (up.error) return Response.json({ error: up.error.message }, { status: 500 });
 
         const ins = await supabaseAdmin.from("books")
-            .insert({ owner_user_id: auth.user.id, title, storage_path: storagePath, indexing_status: "pending" })
-            .select("id,title,storage_path,created_at").single();
+            .insert({ owner_user_id: auth.user.id, title, storage_path: storagePath, indexing_status: "pending", language })
+            .select("id,title,storage_path,created_at,language").single();
         if (ins.error) return Response.json({ error: ins.error.message }, { status: 500 });
 
         const bookId = ins.data.id;

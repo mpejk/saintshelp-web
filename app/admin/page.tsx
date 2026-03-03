@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useTheme, tc } from "@/lib/theme";
+import { useLocale } from "@/lib/i18n";
 
 type UserRow = {
     id: string;
@@ -16,6 +17,7 @@ export default function AdminPage() {
     const supabase = useMemo(() => supabaseBrowser(), []);
     const { isDark } = useTheme();
     const t = tc(isDark);
+    const { t: tr } = useLocale();
 
     const [users, setUsers] = useState<UserRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -32,7 +34,7 @@ export default function AdminPage() {
 
         const token = await getAccessToken();
         if (!token) {
-            setErr("Not logged in");
+            setErr(tr("adminNotLoggedIn"));
             setUsers([]);
             setLoading(false);
             return;
@@ -63,7 +65,7 @@ export default function AdminPage() {
 
         const token = await getAccessToken();
         if (!token) {
-            setErr("Not logged in");
+            setErr(tr("adminNotLoggedIn"));
             return;
         }
 
@@ -138,21 +140,21 @@ export default function AdminPage() {
 
     return (
         <div style={styles.wrap}>
-            <h1 style={styles.h1}>Admin</h1>
-            <p style={styles.muted}>Approve or block newly registered users.</p>
+            <h1 style={styles.h1}>{tr("adminTitle")}</h1>
+            <p style={styles.muted}>{tr("adminDesc")}</p>
 
             {err && <div style={styles.error}>{err}</div>}
 
             {loading ? (
-                <div style={{ marginTop: 14, fontSize: 13 }}>Loading…</div>
+                <div style={{ marginTop: 14, fontSize: 13 }}>{tr("loading")}</div>
             ) : (
                 <div style={{ overflowX: "auto", marginTop: 14 }}>
                 <table style={{ ...styles.table, marginTop: 0 }}>
                     <thead>
                         <tr>
-                            <th style={styles.th}>Email</th>
-                            <th style={styles.th}>Status</th>
-                            <th style={styles.th}>Admin</th>
+                            <th style={styles.th}>{tr("adminEmail")}</th>
+                            <th style={styles.th}>{tr("adminStatus")}</th>
+                            <th style={styles.th}>{tr("adminAdminCol")}</th>
                             <th style={styles.th}></th>
                         </tr>
                     </thead>
@@ -174,13 +176,13 @@ export default function AdminPage() {
                                 <td style={styles.td}>
                                     <div style={styles.rowActions}>
                                         <button style={styles.btnPrimary} onClick={() => setStatus(u.id, "approved")}>
-                                            Approve
+                                            {tr("adminApprove")}
                                         </button>
                                         <button style={styles.btn} onClick={() => setStatus(u.id, "blocked")}>
-                                            Block
+                                            {tr("adminBlock")}
                                         </button>
                                         <button style={styles.btn} onClick={() => setStatus(u.id, "pending")}>
-                                            Pending
+                                            {tr("adminPending")}
                                         </button>
                                     </div>
                                 </td>
@@ -190,7 +192,7 @@ export default function AdminPage() {
                         {users.length === 0 && (
                             <tr>
                                 <td style={styles.td} colSpan={4}>
-                                    No users found.
+                                    {tr("adminNoUsers")}
                                 </td>
                             </tr>
                         )}

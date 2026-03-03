@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { Suspense } from "react";
 import { useTheme, tc } from "@/lib/theme";
+import { useLocale } from "@/lib/i18n";
 
 function LoginForm() {
     const supabase = useMemo(() => supabaseBrowser(), []);
@@ -12,6 +13,7 @@ function LoginForm() {
     const searchParams = useSearchParams();
     const { isDark, toggle } = useTheme();
     const t = tc(isDark);
+    const { locale, setLocale, t: tr } = useLocale();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -31,8 +33,8 @@ function LoginForm() {
     async function submit() {
         setMsg("");
         setMsgIsError(false);
-        if (!email.trim()) { setMsg("Enter email."); setMsgIsError(true); return; }
-        if (!password) { setMsg("Enter password."); setMsgIsError(true); return; }
+        if (!email.trim()) { setMsg(tr("loginEnterEmail")); setMsgIsError(true); return; }
+        if (!password) { setMsg(tr("loginEnterPassword")); setMsgIsError(true); return; }
 
         setLoading(true);
 
@@ -69,7 +71,7 @@ function LoginForm() {
     async function sendReset() {
         setMsg("");
         setMsgIsError(false);
-        if (!email.trim()) { setMsg("Enter your email address first."); setMsgIsError(true); return; }
+        if (!email.trim()) { setMsg(tr("loginEnterEmail")); setMsgIsError(true); return; }
         setLoading(true);
         const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
             redirectTo: `${window.location.origin}/auth/callback`,
@@ -148,14 +150,29 @@ function LoginForm() {
         cursor: "pointer",
     };
 
+    const langToggle = (
+        <div style={{ position: "fixed", top: 16, right: 16, display: "flex", gap: 8 }}>
+            <button
+                onClick={() => setLocale(locale === "en" ? "hr" : "en")}
+                title={locale === "en" ? "Hrvatski" : "English"}
+                style={{ ...toggleBtnStyle, position: "static", fontSize: 12, fontWeight: 600 }}
+            >
+                {locale === "en" ? "HR" : "EN"}
+            </button>
+            <button onClick={toggle} title={isDark ? tr("themeLight") : tr("themeDark")} style={{ ...toggleBtnStyle, position: "static" }}>
+                {isDark ? "☀" : "☾"}
+            </button>
+        </div>
+    );
+
     if (resetSent) {
         return (
             <div style={pageStyle}>
-                <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={toggleBtnStyle}>{isDark ? "☀" : "☾"}</button>
+                {langToggle}
                 <div style={cardStyle}>
-                    <h2 style={{ margin: 0, fontSize: 18 }}>Check your email</h2>
+                    <h2 style={{ margin: 0, fontSize: 18 }}>{tr("loginCheckEmail")}</h2>
                     <p style={{ marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
-                        We sent a password reset link to <b>{email}</b>. Click it to set a new password.
+                        {tr("loginResetSent", { email })}
                     </p>
                     <div style={{ marginTop: 18 }}>
                         <button
@@ -166,7 +183,7 @@ function LoginForm() {
                                 setMsg("");
                             }}
                         >
-                            Back to sign in
+                            {tr("loginBackToSignIn")}
                         </button>
                     </div>
                 </div>
@@ -177,11 +194,11 @@ function LoginForm() {
     if (resetting) {
         return (
             <div style={pageStyle}>
-                <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={toggleBtnStyle}>{isDark ? "☀" : "☾"}</button>
+                {langToggle}
                 <div style={cardStyle}>
-                    <h2 style={{ margin: 0, fontSize: 18 }}>Reset password</h2>
+                    <h2 style={{ margin: 0, fontSize: 18 }}>{tr("loginResetPassword")}</h2>
                     <div style={{ marginTop: 16 }}>
-                        <label style={{ fontSize: 12 }}>Email</label>
+                        <label style={{ fontSize: 12 }}>{tr("loginEmail")}</label>
                         <input
                             style={inputStyle}
                             value={email}
@@ -191,13 +208,13 @@ function LoginForm() {
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
                         <button style={primaryBtn} onClick={sendReset} disabled={loading}>
-                            {loading ? "Sending…" : "Send reset link"}
+                            {loading ? tr("loginSending") : tr("loginSendResetLink")}
                         </button>
                         <button
                             style={secondaryBtn}
                             onClick={() => { setResetting(false); setMsg(""); }}
                         >
-                            Cancel
+                            {tr("cancel")}
                         </button>
                     </div>
                     {msg && (
@@ -213,15 +230,14 @@ function LoginForm() {
     if (confirming) {
         return (
             <div style={pageStyle}>
-                <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={toggleBtnStyle}>{isDark ? "☀" : "☾"}</button>
+                {langToggle}
                 <div style={cardStyle}>
-                    <h2 style={{ margin: 0, fontSize: 18 }}>Check your email</h2>
+                    <h2 style={{ margin: 0, fontSize: 18 }}>{tr("loginCheckEmail")}</h2>
                     <p style={{ marginTop: 12, fontSize: 14, lineHeight: 1.6 }}>
-                        We sent a confirmation link to <b>{email}</b>. Click it to verify your address.
+                        {tr("loginConfirmSent", { email })}
                     </p>
                     <p style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6, color: t.fgMuted }}>
-                        After confirming, your account will be reviewed by an admin before you can sign in.
-                        This typically takes a day or two.
+                        {tr("loginPendingReview")}
                     </p>
                     <div style={{ marginTop: 18 }}>
                         <button
@@ -232,7 +248,7 @@ function LoginForm() {
                                 setMsg("");
                             }}
                         >
-                            Back to sign in
+                            {tr("loginBackToSignIn")}
                         </button>
                     </div>
                 </div>
@@ -242,18 +258,18 @@ function LoginForm() {
 
     return (
         <div style={pageStyle}>
-            <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={toggleBtnStyle}>{isDark ? "☀" : "☾"}</button>
+            {langToggle}
             <div style={{ width: "100%", maxWidth: 420 }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
                 <img src="/logo.svg" alt="SaintsHelp" style={{ height: 40, width: "auto", filter: isDark ? "invert(1)" : "none" }} />
             </div>
             <div style={cardStyle}>
                 <h2 style={{ margin: 0, fontSize: 18 }}>
-                    {mode === "signin" ? "Sign in" : "Sign up"}
+                    {mode === "signin" ? tr("signIn") : tr("signUp")}
                 </h2>
 
                 <div style={{ marginTop: 16 }}>
-                    <label style={{ fontSize: 12 }}>Email</label>
+                    <label style={{ fontSize: 12 }}>{tr("loginEmail")}</label>
                     <input
                         style={inputStyle}
                         value={email}
@@ -263,7 +279,7 @@ function LoginForm() {
                 </div>
 
                 <div style={{ marginTop: 14 }}>
-                    <label style={{ fontSize: 12 }}>Password</label>
+                    <label style={{ fontSize: 12 }}>{tr("loginPassword")}</label>
                     <input
                         style={inputStyle}
                         type="password"
@@ -287,10 +303,10 @@ function LoginForm() {
                         disabled={loading}
                     >
                         {loading
-                            ? "Working…"
+                            ? tr("working")
                             : mode === "signin"
-                                ? "Sign in"
-                                : "Sign up"}
+                                ? tr("signIn")
+                                : tr("signUp")}
                     </button>
 
                     <button
@@ -302,8 +318,8 @@ function LoginForm() {
                         }
                     >
                         {mode === "signin"
-                            ? "Create account"
-                            : "Back to sign in"}
+                            ? tr("landingCreateAccount")
+                            : tr("loginBackToSignIn")}
                     </button>
                 </div>
 
@@ -319,7 +335,7 @@ function LoginForm() {
                             style={{ background: "none", border: "none", padding: 0, fontSize: 13, color: t.fgMuted, cursor: "pointer", textDecoration: "underline" }}
                             onClick={() => { setResetting(true); setMsg(""); }}
                         >
-                            Forgot password?
+                            {tr("loginForgotPassword")}
                         </button>
                     </div>
                 )}

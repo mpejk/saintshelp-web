@@ -4,12 +4,14 @@ import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useTheme, tc } from "@/lib/theme";
+import { useLocale } from "@/lib/i18n";
 
 export default function Home() {
     const supabase = useMemo(() => supabaseBrowser(), []);
     const router = useRouter();
     const { isDark, toggle } = useTheme();
     const t = tc(isDark);
+    const { locale, setLocale, t: tr } = useLocale();
 
     // Redirect already-authenticated users straight to the app
     useEffect(() => {
@@ -125,46 +127,48 @@ export default function Home() {
 
     return (
         <div style={styles.page}>
-            <button onClick={toggle} title={isDark ? "Switch to light mode" : "Switch to dark mode"} style={styles.toggleBtn}>
-                {isDark ? "☀" : "☾"}
-            </button>
+            <div style={{ position: "fixed", top: 16, right: 16, display: "flex", gap: 8 }}>
+                <button
+                    onClick={() => setLocale(locale === "en" ? "hr" : "en")}
+                    title={locale === "en" ? "Hrvatski" : "English"}
+                    style={{ ...styles.toggleBtn, position: "static", fontSize: 12, fontWeight: 600 }}
+                >
+                    {locale === "en" ? "HR" : "EN"}
+                </button>
+                <button onClick={toggle} title={isDark ? tr("themeLight") : tr("themeDark")} style={{ ...styles.toggleBtn, position: "static" }}>
+                    {isDark ? "☀" : "☾"}
+                </button>
+            </div>
             <div style={styles.inner}>
                 <img src="/logo.svg" alt="SaintsHelp" style={styles.logo} />
 
-                <h1 style={styles.h1}>Find what the saints actually said.</h1>
+                <h1 style={styles.h1}>{tr("landingHeadline")}</h1>
 
-                <p style={styles.desc}>
-                    SaintsHelp searches theological texts and returns verbatim quotations —
-                    no paraphrasing, no AI-generated answers. Only the exact words from
-                    primary sources like scripture and the Church Fathers.
-                </p>
+                <p style={styles.desc}>{tr("landingDesc")}</p>
 
                 <div style={styles.actions}>
                     <button style={styles.primaryBtn} onClick={() => router.push("/login")}>
-                        Sign in
+                        {tr("signIn")}
                     </button>
                     <button style={styles.secondaryBtn} onClick={() => router.push("/login?mode=signup")}>
-                        Create account
+                        {tr("landingCreateAccount")}
                     </button>
                 </div>
 
-                <p style={styles.note}>
-                    Access is by approval only. After confirming your email, an admin will
-                    review and activate your account.
-                </p>
+                <p style={styles.note}>{tr("landingAccessNote")}</p>
 
                 <div className="landing-features">
                     <div style={styles.featureCard}>
-                        <p style={styles.featureTitle}>Verbatim only</p>
-                        <p style={styles.featureDesc}>Every result is a direct quote from the source text — nothing invented or summarised.</p>
+                        <p style={styles.featureTitle}>{tr("featureVerbatimTitle")}</p>
+                        <p style={styles.featureDesc}>{tr("featureVerbatimDesc")}</p>
                     </div>
                     <div style={styles.featureCard}>
-                        <p style={styles.featureTitle}>Primary sources</p>
-                        <p style={styles.featureDesc}>Search scripture, the Desert Fathers, Church Fathers, and other theological works.</p>
+                        <p style={styles.featureTitle}>{tr("featureSourcesTitle")}</p>
+                        <p style={styles.featureDesc}>{tr("featureSourcesDesc")}</p>
                     </div>
                     <div style={styles.featureCard}>
-                        <p style={styles.featureTitle}>Cited results</p>
-                        <p style={styles.featureDesc}>Each passage shows the book it came from so you can verify and reference it.</p>
+                        <p style={styles.featureTitle}>{tr("featureCitedTitle")}</p>
+                        <p style={styles.featureDesc}>{tr("featureCitedDesc")}</p>
                     </div>
                 </div>
             </div>

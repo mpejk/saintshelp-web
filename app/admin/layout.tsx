@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useTheme, tc } from "@/lib/theme";
+import { useLocale } from "@/lib/i18n";
 
 type Profile = {
     status: "pending" | "approved" | "blocked";
@@ -57,6 +58,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     const { isDark, toggle } = useTheme();
     const t = tc(isDark);
+    const { locale, setLocale, t: tr } = useLocale();
 
     const styles = {
         page: {
@@ -96,7 +98,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
     const linkStyle = (href: string) => (isActive(href) ? styles.btnActive : styles.btn);
 
-    if (loading) return <main className="app-page" style={styles.page}>Loading…</main>;
+    if (loading) return <main className="app-page" style={styles.page}>{tr("loading")}</main>;
 
     return (
         <main className="app-page" style={styles.page}>
@@ -107,27 +109,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
                 <div className="app-nav" style={styles.nav}>
                     <button
+                        onClick={() => setLocale(locale === "en" ? "hr" : "en")}
+                        title={locale === "en" ? "Hrvatski" : "English"}
+                        style={{ ...styles.btn, fontSize: 12, padding: "6px 10px", fontWeight: 600 }}
+                    >
+                        {locale === "en" ? "HR" : "EN"}
+                    </button>
+                    <button
                         onClick={toggle}
-                        title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                        title={isDark ? tr("themeLight") : tr("themeDark")}
                         style={{ ...styles.btn, fontSize: 16, padding: "6px 10px" }}
                     >
                         {isDark ? "☀" : "☾"}
                     </button>
                     <button style={linkStyle("/app")} onClick={() => router.push("/app")}>
-                        Home
+                        {tr("navHome")}
                     </button>
                     <button style={linkStyle("/app/books")} onClick={() => router.push("/app/books")}>
-                        Books
+                        {tr("navBooks")}
                     </button>
                     <button style={linkStyle("/app/ask")} onClick={() => router.push("/app/ask")}>
-                        Ask
+                        {tr("navAsk")}
                     </button>
                     <button style={linkStyle("/admin")} onClick={() => router.push("/admin")}>
-                        Admin
+                        {tr("navAdmin")}
                     </button>
 
                     <button style={styles.btn} onClick={signOut}>
-                        Sign out
+                        {tr("signOut")}
                     </button>
 
                     {profile?.email && <div style={styles.meta}>{profile.email}</div>}

@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useRouter } from "next/navigation";
 import { useTheme, tc } from "@/lib/theme";
+import { useLocale } from "@/lib/i18n";
 
-type Book = { id: string; title: string; created_at: string };
+type Book = { id: string; title: string; created_at: string; topic_ids?: string[] };
+type Topic = { id: string; name: string; display_order: number };
 type Passage = { id: string; book_id: string; book_title: string; score: number | null; text: string };
 
 type Msg =
@@ -19,9 +21,11 @@ export default function AskPage() {
     const router = useRouter();
 
     const [books, setBooks] = useState<Book[]>([]);
+    const [topics, setTopics] = useState<Topic[]>([]);
     const [selected, setSelected] = useState<Record<string, boolean>>({});
     const [question, setQuestion] = useState("");
     const [chat, setChat] = useState<Msg[]>([]);
+    const { locale, t: tr } = useLocale();
     const [status, setStatus] = useState("Loading...");
 
     const [conversationId, setConversationId] = useState<string | null>(null);
@@ -44,8 +48,8 @@ export default function AskPage() {
     const lastUserMsgRef = useRef<HTMLDivElement>(null);
     const scrollToUserMsg = useRef(false);
 
-    // Book selection preference stored per-user (UI preference, not conversation data)
-    const LS_SELECTED_KEY = `saintshelp.selected.v1.${userId ?? ""}`;
+    // Book selection preference stored per-user per-language (UI preference, not conversation data)
+    const LS_SELECTED_KEY = `saintshelp.selected.v1.${userId ?? ""}.${locale}`;
 
     const [threads, setThreads] = useState<ThreadIndexItem[]>([]);
 
@@ -107,7 +111,7 @@ export default function AskPage() {
     }
 
     async function clearAllChats(): Promise<void> {
-        if (!confirm("Delete all conversations? This cannot be undone.")) return;
+        if (!confirm(tr("askClearAllConfirm"))) return;
         const token = await getToken();
         if (!token) return;
         await fetch("/api/conversations", {
@@ -131,21 +135,34 @@ export default function AskPage() {
         setUserId(uid);
         const token = session.access_token;
 
-        const res = await fetch("/api/books", { headers: { Authorization: `Bearer ${token}` } });
-        const text = await res.text();
-        const json = text ? JSON.parse(text) : {};
-        if (!res.ok) {
+        const [booksRes, topicsRes] = await Promise.all([
+            fetch(`/api/books?language=${locale}`, { headers: { Authorization: `Bearer ${token}` } }),
+            fetch("/api/topics", { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+
+        const booksText = await booksRes.text();
+        const json = booksText ? JSON.parse(booksText) : {};
+        if (!booksRes.ok) {
             setStatus("Error: " + (json.error ?? "Unknown"));
             return;
         }
 
+        const topicsJson = await topicsRes.json().catch(() => ({}));
+        setTopics((topicsJson?.topics ?? []) as Topic[]);
+
         const list = (json.books ?? []) as Book[];
         setBooks(list);
 
-        // Restore saved book selection, defaulting any new books to selected
+        // Restore saved book selection (per-language key), defaulting any new books to selected
         setSelected(() => {
+            const newKey = `saintshelp.selected.v1.${uid}.${locale}`;
             try {
-                const raw = localStorage.getItem(`saintshelp.selected.v1.${uid}`);
+                let raw = localStorage.getItem(newKey);
+                // Migrate: if new key doesn't exist, copy from old key for English
+                if (!raw && locale === "en") {
+                    const oldKey = `saintshelp.selected.v1.${uid}`;
+                    raw = localStorage.getItem(oldKey);
+                }
                 if (raw) {
                     const saved = JSON.parse(raw) as Record<string, boolean>;
                     if (saved && typeof saved === "object") {
@@ -192,7 +209,7 @@ export default function AskPage() {
     }
 
     async function deleteThread(id: string) {
-        if (!confirm("Delete this conversation?")) return;
+        if (!confirm(tr("askDeleteConfirm"))) return;
         await deleteConversationApi(id);
         const refreshed = await fetchThreads();
         setThreads(refreshed);
@@ -240,7 +257,7 @@ export default function AskPage() {
 
         const ids = selectedIds();
         if (ids.length === 0) {
-            setChat((c) => [...c, { role: "assistant", passages: [], error: "Select at least one book." }]);
+            setChat((c) => [...c, { role: "assistant", passages: [], error: tr("askSelectBook") }]);
             return;
         }
 
@@ -249,7 +266,7 @@ export default function AskPage() {
         setChat((c) => [...c, { role: "user", text: q }]);
         setQuestion("");
 
-        setChat((c) => [...c, { role: "assistant", passages: [], error: "Searching…" }]);
+        setChat((c) => [...c, { role: "assistant", passages: [], error: tr("askSearching") }]);
 
         const token = await getToken();
         if (!token) {
@@ -284,7 +301,7 @@ export default function AskPage() {
             const copy = [...prev];
             for (let i = copy.length - 1; i >= 0; i--) {
                 const m = copy[i];
-                if (m.role === "assistant" && m.error === "Searching…") {
+                if (m.role === "assistant" && (m.error === "Searching…" || m.error === tr("askSearching"))) {
                     copy.splice(i, 1);
                     break;
                 }
@@ -312,12 +329,12 @@ export default function AskPage() {
         setThreads(refreshed);
     }
 
-    // ---------- Mount: load books (also sets userId) ----------
+    // ---------- Mount + locale change: load books (also sets userId) ----------
     useEffect(() => {
         loadBooks();
         fetchSuggestedQuestions();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [locale]);
 
     // ---------- Once userId is known: load threads from DB ----------
     useEffect(() => {
@@ -443,25 +460,25 @@ export default function AskPage() {
                             marginBottom: 10,
                         }}
                     >
-                        <h2 style={styles.h2}>Threads</h2>
+                        <h2 style={styles.h2}>{tr("askThreads")}</h2>
                         <div style={{ display: "flex", gap: 6 }}>
                             <button style={styles.btn} onClick={newChat}>
-                                New chat
+                                {tr("askNewChat")}
                             </button>
                             {threads.length > 0 && (
                                 <button
                                     style={{ ...styles.btn, opacity: 0.6 }}
                                     onClick={clearAllChats}
-                                    title="Delete all conversations"
+                                    title={tr("askClearAll")}
                                 >
-                                    Clear all
+                                    {tr("askClearAll")}
                                 </button>
                             )}
                         </div>
                     </div>
 
                     {threads.length === 0 ? (
-                        <p style={{ margin: "0 0 12px 0", fontSize: 13, opacity: 0.7 }}>No threads yet.</p>
+                        <p style={{ margin: "0 0 12px 0", fontSize: 13, opacity: 0.7 }}>{tr("askNoThreads")}</p>
                     ) : (
                         <div className="ask-threads-list" style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
                             {threads.map((t) => (
@@ -508,25 +525,73 @@ export default function AskPage() {
 
                     {/* Books */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <h2 style={styles.h2}>Search in</h2>
+                        <h2 style={styles.h2}>{tr("askSearchIn")}</h2>
                         <div style={{ fontSize: 12, opacity: 0.7 }}>{status}</div>
                     </div>
 
                     {books.length > 0 && (
                         <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
-                            Selected: {selectedIds().length}/{books.length} books
+                            {tr("booksSelected", { count: String(selectedIds().length), total: String(books.length) })}
                         </div>
                     )}
+
+                    {topics.length > 0 && (
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+                            <button
+                                style={{
+                                    border: `1px solid ${tc(isDark).btnBorder}`,
+                                    background: tc(isDark).btnBg,
+                                    color: tc(isDark).btnFg,
+                                    borderRadius: 14,
+                                    padding: "3px 8px",
+                                    fontSize: 11,
+                                    cursor: "pointer",
+                                }}
+                                onClick={() => {
+                                    const sel: Record<string, boolean> = {};
+                                    for (const b of books) sel[b.id] = true;
+                                    setSelected(sel);
+                                }}
+                            >
+                                {tr("booksAll")}
+                            </button>
+                            {topics.map((tp) => (
+                                <button
+                                    key={tp.id}
+                                    style={{
+                                        border: `1px solid ${tc(isDark).btnBorder}`,
+                                        background: tc(isDark).btnBg,
+                                        color: tc(isDark).btnFg,
+                                        borderRadius: 14,
+                                        padding: "3px 8px",
+                                        fontSize: 11,
+                                        cursor: "pointer",
+                                    }}
+                                    onClick={() => {
+                                        const topicBookIds = new Set(
+                                            books.filter((b) => (b.topic_ids ?? []).includes(tp.id)).map((b) => b.id)
+                                        );
+                                        const sel: Record<string, boolean> = {};
+                                        for (const b of books) sel[b.id] = topicBookIds.has(b.id);
+                                        setSelected(sel);
+                                    }}
+                                >
+                                    {tp.name}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     <button
                         style={styles.btn}
                         onClick={() => router.push("/app/books")}
                     >
-                        Manage Books
+                        {tr("askManageBooks")}
                     </button>
 
                     {conversationTitle && (
                         <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${t.border}` }}>
-                            <div style={styles.subhead}>Conversation</div>
+                            <div style={styles.subhead}>{tr("askConversation")}</div>
                             <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.3 }}>{conversationTitle}</div>
                         </div>
                     )}
@@ -535,18 +600,17 @@ export default function AskPage() {
                 <section className="ask-main" style={styles.card}>
                     <div className="ask-chat-box" style={{ padding: 12 }} ref={chatBoxRef}>
                         {loadingThread ? (
-                            <div style={{ fontSize: 13, opacity: 0.6, padding: 12 }}>Loading...</div>
+                            <div style={{ fontSize: 13, opacity: 0.6, padding: 12 }}>{tr("loading")}</div>
                         ) : chat.length === 0 ? (
                             <div>
                                 <p style={{ margin: "0 0 6px 0", fontSize: 14, fontWeight: 600 }}>
-                                    How it works
+                                    {tr("askHowItWorks")}
                                 </p>
                                 <p style={{ margin: "0 0 20px 0", fontSize: 13, opacity: 0.75, lineHeight: 1.6 }}>
-                                    Type a question and SaintsHelp will search the selected books for relevant passages,
-                                    returning the exact words from the source — no paraphrasing, no AI-generated answers.
+                                    {tr("askHowItWorksDesc")}
                                 </p>
                                 <p style={{ margin: "0 0 10px 0", fontSize: 12, opacity: 0.5, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                                    Try asking
+                                    {tr("askTryAsking")}
                                 </p>
                                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                     {suggestedQuestions.map((q) => (
@@ -584,7 +648,7 @@ export default function AskPage() {
                                         ) : m.error ? (
                                             <div style={{ fontSize: 13, opacity: 0.85 }}>{m.error}</div>
                                         ) : m.passages.length === 0 ? (
-                                            <div style={{ fontSize: 13, opacity: 0.75 }}>No passages found.</div>
+                                            <div style={{ fontSize: 13, opacity: 0.75 }}>{tr("askNoPassages")}</div>
                                         ) : (
                                             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                                                 {m.passages.map((p, i) => (
@@ -641,7 +705,7 @@ export default function AskPage() {
                                                                                 opacity: loadingFullId === p.id ? 0.6 : 1,
                                                                             }}
                                                                         >
-                                                                            {loadingFullId === p.id ? "Loading…" : "Show full saying"}
+                                                                            {loadingFullId === p.id ? tr("askLoadingFull") : tr("askShowFull")}
                                                                         </button>
                                                                     )}
 
@@ -661,7 +725,7 @@ export default function AskPage() {
                                                                         color: copiedId === p.id ? t.copyActiveFg : t.fg,
                                                                     }}
                                                                 >
-                                                                    {copiedId === p.id ? "Copied!" : "Copy"}
+                                                                    {copiedId === p.id ? tr("askCopied") : tr("askCopy")}
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -681,7 +745,7 @@ export default function AskPage() {
                         <input
                             value={question}
                             onChange={(e) => setQuestion(e.target.value)}
-                            placeholder="Ask something…"
+                            placeholder={tr("askPlaceholder")}
                             style={styles.input}
                             onKeyDown={(e) => {
                                 if (e.key === "Enter") ask();
@@ -693,7 +757,7 @@ export default function AskPage() {
                             onClick={ask}
                             disabled={asking}
                         >
-                            {asking ? "Asking…" : "Ask"}
+                            {asking ? tr("askAsking") : tr("askBtn")}
                         </button>
                     </div>
                 </section>

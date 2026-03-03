@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { useRouter } from "next/navigation";
 import { useTheme, tc } from "@/lib/theme";
+import { useLocale } from "@/lib/i18n";
 
 type Profile = {
     status: "pending" | "approved" | "blocked";
@@ -16,6 +17,7 @@ export default function AppHome() {
     const router = useRouter();
     const { isDark } = useTheme();
     const t = tc(isDark);
+    const { t: tr } = useLocale();
 
     const [profile, setProfile] = useState<Profile | null>(null);
     const [err, setErr] = useState<string>("");
@@ -82,43 +84,41 @@ export default function AppHome() {
 
     return (
         <div style={styles.wrap}>
-            <h1 style={styles.h1}>Home</h1>
+            <h1 style={styles.h1}>{tr("homeTitle")}</h1>
 
             <div style={styles.pill}>
-                Status: <b style={{ textTransform: "capitalize" }}>{profile.status}</b>
+                {tr("homeStatus")} <b style={{ textTransform: "capitalize" }}>{profile.status}</b>
             </div>
 
             {profile.status === "pending" && (
                 <div style={{ ...styles.note, lineHeight: 1.65 }}>
-                    <b>Your account is pending admin approval.</b>
+                    <b>{tr("homePendingMsg")}</b>
                     <br />
-                    This is a manual review — you will be able to use SaintsHelp once an admin
-                    activates your account. This typically takes a day or two. You can check
-                    back here at any time to see your status.
+                    {tr("homePendingDetail")}
                 </div>
             )}
 
             {profile.status === "blocked" && (
-                <p style={styles.note}>Your account is blocked. Contact an admin if this is a mistake.</p>
+                <p style={styles.note}>{tr("homeBlockedMsg")}</p>
             )}
 
             {approved && (
                 <div className="home-grid">
                     {profile.is_admin && (
                         <div style={styles.card}>
-                            <p style={styles.cardTitle}>Manage books</p>
-                            <p style={styles.cardDesc}>Upload PDFs, delete books, and manage your library.</p>
+                            <p style={styles.cardTitle}>{tr("homeManageBooks")}</p>
+                            <p style={styles.cardDesc}>{tr("homeManageBooksDesc")}</p>
                             <button style={styles.btnPrimary} onClick={() => router.push("/app/books")}>
-                                Open Books
+                                {tr("homeOpenBooks")}
                             </button>
                         </div>
                     )}
 
                     <div style={styles.card}>
-                        <p style={styles.cardTitle}>Ask SaintsHelp</p>
-                        <p style={styles.cardDesc}>Ask questions and receive verbatim quotations only.</p>
+                        <p style={styles.cardTitle}>{tr("homeAskTitle")}</p>
+                        <p style={styles.cardDesc}>{tr("homeAskDesc")}</p>
                         <button style={styles.btnPrimary} onClick={() => router.push("/app/ask")}>
-                            Open Ask
+                            {tr("homeOpenAsk")}
                         </button>
                     </div>
                 </div>
