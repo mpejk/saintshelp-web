@@ -1,9 +1,30 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireApprovedUser } from "@/lib/authServer";
 import { embedQuery } from "@/lib/voyage";
+import {
+    sanitizeText, dewrapPdfLines, stripPageMarkers, stripAuthorTitleLines,
+    stripFootnoteLines, stripHeaderLines, stripInlineHeaders,
+    stripLikelyHeaderFooterLines, trimLeadingFragment, trimTrailingFragment,
+} from "@/lib/textClean";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
+
+/** Snap a preview string to the last sentence boundary within maxLen */
+function snapToSentenceEnd(text: string, maxLen: number): string {
+    if (text.length <= maxLen) return text;
+    const window = text.slice(0, maxLen);
+    const sentEndRe = /[.!?;]["'\u2019\u201D)]*(?:\s|$)/g;
+    let lastEnd = -1;
+    let m: RegExpExecArray | null;
+    while ((m = sentEndRe.exec(window)) !== null) {
+        lastEnd = m.index + m[0].trimEnd().length;
+    }
+    const terminalIdx = Math.max(window.lastIndexOf("."), window.lastIndexOf("?"), window.lastIndexOf("!"), window.lastIndexOf(";"));
+    if (terminalIdx > lastEnd && terminalIdx === window.length - 1) lastEnd = terminalIdx + 1;
+    if (lastEnd > maxLen * 0.4) return text.slice(0, lastEnd);
+    return window;
+}
 
 function extractLogicalUnit(text: string, terms: string[]) {
     const MAX_PREVIEW = 900;
@@ -25,7 +46,10 @@ function extractLogicalUnit(text: string, terms: string[]) {
 
     const make = (full: string) => {
         const f = full.trim();
-        const preview = f.length > MAX_PREVIEW ? f.slice(0, MAX_PREVIEW) + "…" : f;
+        if (f.length <= MAX_PREVIEW) return { full: f, preview: f };
+        const snapped = snapToSentenceEnd(f, MAX_PREVIEW);
+        // Always add "…" when preview is shorter than full so "Show full" button appears
+        const preview = snapped.length < f.length ? snapped + "…" : snapped;
         return { full: f, preview };
     };
 
@@ -49,12 +73,34 @@ function extractLogicalUnit(text: string, terms: string[]) {
     const para = text.slice(pStart, pEnd).trim();
     if (para.length >= 60) return make(para);
 
-    const radius = 350;
-    const start = Math.max(0, idx - radius);
-    const end = Math.min(text.length, idx + radius);
+    // Radius fallback — snap to sentence boundaries
+    const radius = 400;
+    let start = Math.max(0, idx - radius);
+    let end = Math.min(text.length, idx + radius);
+
+    // Snap start forward to next sentence boundary
+    if (start > 0) {
+        const head = text.slice(start, Math.min(start + 200, end));
+        const sentStart = head.search(/[.!?;]\s+[A-Z"'\u2018\u201C]/);
+        if (sentStart >= 0) {
+            const afterPunct = head.slice(sentStart + 1).search(/[A-Z"'\u2018\u201C]/);
+            if (afterPunct >= 0) start = start + sentStart + 1 + afterPunct;
+        }
+    }
+
+    // Snap end backward to last sentence boundary
+    if (end < text.length) {
+        const tail = text.slice(Math.max(start, end - 200), end);
+        const sentEndRe2 = /[.!?;]["'\u2019\u201D)]*\s/g;
+        let lastEnd = -1;
+        let m2: RegExpExecArray | null;
+        while ((m2 = sentEndRe2.exec(tail)) !== null) lastEnd = m2.index + m2[0].trimEnd().length;
+        if (lastEnd >= 0) end = Math.max(start, end - 200) + lastEnd;
+    }
+
     let snip = text.slice(start, end).trim();
-    if (start > 0) snip = "…" + snip;
-    if (end < text.length) snip = snip + "…";
+    if (start > 0 && !/^[A-Z"'\u2018\u201C(\d]/.test(snip)) snip = "…" + snip;
+    if (end < text.length && !/[.!?'"\u2019\u201D)]$/.test(snip)) snip = snip + "…";
     return make(snip);
 }
 
@@ -72,146 +118,6 @@ function looksLikeTOCOrIndex(s: string): boolean {
     const shortLines = lines.filter((x) => x.length <= 40).length;
     if (lines.length >= 6 && dotLeaderCount >= 1 && shortLines / lines.length > 0.7) return true;
     return false;
-}
-
-function stripLikelyHeaderFooterLines(s: string): string {
-    const lines = (s ?? "").split("\n");
-    const cleaned = lines.filter((line) => {
-        const t = line.trim();
-        if (!t) return true;
-        if (/^\s*\d{1,5}\s*$/.test(t)) return false;
-        if (/^\s*p\.?\s*\d{1,5}\s*$/i.test(t)) return false;
-        if (/douay[-\s]?rheims/i.test(t) && /\bbible\b/i.test(t)) return false;
-        if ((t.match(/\.{5,}/g) ?? []).length >= 1 && t.length < 120) return false;
-        return true;
-    });
-    return cleaned.join("\n").trim();
-}
-
-function sanitizeText(s: string) {
-    return String(s ?? "")
-        .normalize("NFKC")
-        .replace(/[\u00A0\u1680\u180E\u2000-\u200A\u202F\u205F\u3000]/g, " ")
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, "")
-        .replace(/[\uFEFF\uFFFD\uFFFE\uFFFF]/g, "")
-        .replace(/[\u200B\u200C\u200D\u2060]/g, "")
-        .replace(/[ \t]+\n/g, "\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-}
-
-function dewrapPdfLines(s: string) {
-    if (!s) return "";
-    s = s.replace(/\r\n?/g, "\n");
-    s = s.replace(/\n(?!\n)/g, " ");
-    s = s.replace(/[ \t]+/g, " ");
-    s = s.replace(/\n\n+/g, "\n\n");
-    // Rejoin PDF hyphenation ("cor- rupts" → "corrupts")
-    s = s.replace(/(\w)- (\w)/g, "$1$2");
-    // Strip editorial bracket markers ("[2]", "[ 2 1 1]", "[ 2 1 1" unclosed)
-    s = s.replace(/\[\s*\d+(?:\s+\d+)*\s*\]?/g, "");
-    s = s.replace(/\s{2,}/g, " ");
-    return s.trim();
-}
-
-function stripHeaderLines(s: string): string {
-    return s.split("\n").filter((line) => {
-        const t = line.trim();
-        if (!t) return true;
-        if (/^(CHAPTER|BOOK|PART|SECTION)\s+([IVXLCDM]+|\d+|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)\b/i.test(t)) return false;
-        if (/^[Tt]he\s+\w+\s+(Chapter|Book|Part)\b/i.test(t)) return false;
-        if (/^[A-Z][A-Z\s]{2,40}$/.test(t) && t.split(/\s+/).length <= 5) return false;
-        return true;
-    }).join("\n");
-}
-
-function stripInlineHeaders(s: string): string {
-    let t = s;
-    t = t.replace(/\s+(?:CHAPTER|BOOK|PART|SECTION)\s+(?:[IVXLCDM]+|\d+|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)\b\.?(?:\s+[A-Z][^.!?]{0,80}[.!?])?/g, " ");
-    t = t.replace(/\s+[Tt]he\s+\w+\s+(?:Chapter|Book|Part)\b(?:\s+[A-Z][^.!?]{0,80}[.!?])?/g, " ");
-    t = t.replace(/\b((?:\w+\s+){2,8})\1/g, "$1");
-    t = t.replace(/\s+[A-Z][a-zA-Z ,.''-]{4,80}[a-z]\d{2,4}(?=\s|$)/g, " ");
-    t = t.replace(/\s{2,}/g, " ").trim();
-    return t;
-}
-
-/** Strip PDF page markers like "-- 68 of 157 --" */
-function stripPageMarkers(s: string): string {
-    return s.replace(/--\s*\d+\s+of\s+\d+\s*--/g, "");
-}
-
-/** Strip author/title header lines (tab-separated, e.g. "St. Francis of Sales\tIntroduction...") */
-function stripAuthorTitleLines(s: string): string {
-    return s.split("\n").filter((line) => {
-        return !/\t/.test(line.trim());
-    }).join("\n");
-}
-
-/** Strip footnote reference lines (numbered Bible refs, editorial notes) */
-function stripFootnoteLines(s: string): string {
-    return s.split("\n").filter((line) => {
-        const t = line.trim();
-        if (!t) return true;
-        // Numbered footnotes: "66 1 Cor. iv. 7." or "69 Islands in the Persian Gulf."
-        if (/^\d{1,3}\s+\S/.test(t) && t.length < 80) return false;
-        // Editorial footnotes: "* 10 is an addition from..."
-        if (/^\*\s*\d/.test(t)) return false;
-        return true;
-    }).join("\n");
-}
-
-/** Trim leading word fragments from chunk boundaries */
-function trimLeadingFragment(s: string): string {
-    if (!s) return s;
-    // If starts with a capital letter, quote, or number — already a good boundary
-    if (/^[A-Z"'\u2018\u201C\u201D(\d]/.test(s)) return s;
-    // If starts with 1-3 lowercase chars then space — word fragment, strip it
-    const fragMatch = s.match(/^[a-z]{1,3}\s+/);
-    if (fragMatch) {
-        s = s.slice(fragMatch[0].length);
-    }
-    // If still starts lowercase (mid-sentence), try to find next sentence start
-    if (/^[a-z]/.test(s)) {
-        // Look for opening quote
-        const quoteIdx = s.search(/['"'\u2018\u201C]/);
-        if (quoteIdx >= 0 && quoteIdx < 60) return s.slice(quoteIdx);
-        // Look for sentence start (capital after period/question/exclamation)
-        const sentIdx = s.search(/[.!?]\s+[A-Z]/);
-        if (sentIdx >= 0 && sentIdx < 120) return s.slice(sentIdx + 2);
-        // No good boundary found — prepend ellipsis to signal excerpt
-        return "…" + s;
-    }
-    return s;
-}
-
-/** Trim trailing fragments — incomplete sentences or lone heading words at the end */
-function trimTrailingFragment(s: string): string {
-    if (!s) return s;
-    // Strip trailing single capitalized word (likely a heading from next section)
-    s = s.replace(/\s+[A-Z][a-z]+$/, "");
-    // If text ends mid-sentence (no terminal punctuation), trim to last sentence end
-    const trimmed = s.trim();
-    if (trimmed && !/[.!?'"\u2019\u201D)]$/.test(trimmed)) {
-        const lastEnd = Math.max(
-            trimmed.lastIndexOf(". "),
-            trimmed.lastIndexOf(".' "),
-            trimmed.lastIndexOf("? "),
-            trimmed.lastIndexOf("! "),
-            trimmed.lastIndexOf(".\u201D"),
-            trimmed.lastIndexOf(".\""),
-        );
-        // Also check terminal punctuation at very end (no trailing space)
-        const lastTerminal = Math.max(
-            trimmed.lastIndexOf("."),
-            trimmed.lastIndexOf("?"),
-            trimmed.lastIndexOf("!"),
-        );
-        const best = Math.max(lastEnd, lastTerminal);
-        if (best > trimmed.length * 0.4) {
-            return trimmed.slice(0, best + 1).trim();
-        }
-    }
-    return trimmed;
 }
 
 export async function POST(req: Request) {
@@ -238,30 +144,58 @@ export async function POST(req: Request) {
             if (!allowed) return Response.json({ error: "Daily limit reached" }, { status: 429 });
         }
 
-        // Embed the question via Voyage AI — one API call
-        const queryEmbedding = await embedQuery(question);
+        // Resolve conversation + fetch prior questions for context (if follow-up)
+        let conversationId = "";
+        let priorQuestions: string[] = [];
+        if (conversationIdIn) {
+            const { data: convo, error: cErr } = await supabaseAdmin
+                .from("conversations").select("id,user_id").eq("id", conversationIdIn).single();
+            if (!cErr && convo && convo.user_id === auth.user.id) {
+                conversationId = convo.id;
+                // Fetch last 3 user questions for context
+                const { data: turns } = await supabaseAdmin
+                    .from("conversation_turns")
+                    .select("question")
+                    .eq("conversation_id", conversationId)
+                    .eq("role", "user")
+                    .order("created_at", { ascending: false })
+                    .limit(3);
+                priorQuestions = (turns ?? []).map((t: any) => t.question).filter(Boolean).reverse();
+            }
+        }
+        if (!conversationId) {
+            const { data: newConvo, error: nErr } = await supabaseAdmin
+                .from("conversations").insert({ user_id: auth.user.id, title: question.slice(0, 60) })
+                .select("id").single();
+            if (nErr || !newConvo?.id) throw new Error(nErr?.message ?? "Failed to create conversation");
+            conversationId = newConvo.id;
+        }
 
-        const [convResult, booksResult] = await Promise.all([
-            (async () => {
-                let cid = conversationIdIn || "";
-                if (cid) {
-                    const { data: convo, error: cErr } = await supabaseAdmin
-                        .from("conversations").select("id,user_id").eq("id", cid).single();
-                    if (cErr || !convo || convo.user_id !== auth.user.id) cid = "";
-                }
-                if (!cid) {
-                    const { data: newConvo, error: nErr } = await supabaseAdmin
-                        .from("conversations").insert({ user_id: auth.user.id, title: question.slice(0, 60) })
-                        .select("id").single();
-                    if (nErr || !newConvo?.id) throw new Error(nErr?.message ?? "Failed to create conversation");
-                    cid = newConvo.id;
-                }
-                return cid;
-            })(),
+        // Build search query: use prior questions only as light context to resolve
+        // pronouns (e.g. "it" → "temptation"), but keep the current question dominant.
+        // Format: "Context: <prior topics>. Question: <current> <current>"
+        // Repeating the current question gives it ~2x weight in the embedding.
+        let searchQuery = question;
+        if (priorQuestions.length > 0) {
+            // Extract key nouns/topics from prior questions (strip stop words)
+            const stopWords = new Set(["what","do","the","a","an","is","are","was","were","how","should","i","me","my","we","our","they","them","their","it","its","this","that","these","those","about","from","with","for","in","on","to","of","and","or","but","can","will","would","could","did","does","have","has","had","been","be","so","if","not","no","by","at","as","up","out","all","very","just","than","then","also","into","over","such","too","any","each","some","may","most","other","which","where","when","who","whom","why","shall","much","many"]);
+            const contextTerms = priorQuestions
+                .join(" ")
+                .split(/\s+/)
+                .map((w) => w.toLowerCase().replace(/[^a-z]/g, ""))
+                .filter((w) => w.length > 2 && !stopWords.has(w));
+            const uniqueTerms = [...new Set(contextTerms)].slice(0, 8);
+            if (uniqueTerms.length > 0) {
+                searchQuery = `Context: ${uniqueTerms.join(" ")}. ${question} ${question}`;
+            }
+        }
+
+        // Embed the search query via Voyage AI — one API call
+        const [queryEmbedding, booksResult] = await Promise.all([
+            embedQuery(searchQuery),
             supabaseAdmin.from("books").select("id,title,indexing_status").in("id", selectedBookIds),
         ]);
 
-        const conversationId = convResult;
         if (booksResult.error) return Response.json({ error: booksResult.error.message }, { status: 500 });
 
         const usable = (booksResult.data ?? []).filter((b: any) => b.indexing_status === "ready");
@@ -276,7 +210,7 @@ export async function POST(req: Request) {
             if (tErr) return Response.json({ error: tErr.message }, { status: 500 });
         }
 
-        const terms = question.split(/\s+/).filter(Boolean);
+        const terms = searchQuery.split(/\s+/).filter(Boolean);
 
         // Search via pgvector — one SQL query regardless of book count
         const usableIds = usable.map((b: any) => b.id);
@@ -292,7 +226,7 @@ export async function POST(req: Request) {
         const bookTitleMap = new Map<string, string>();
         for (const b of usable as any[]) bookTitleMap.set(b.id, b.title);
 
-        const candidates: { book_id: string; book_title: string; score: number | null; text: string; full_text: string }[] = [];
+        const candidates: { chunk_id: string; book_id: string; book_title: string; score: number | null; text: string; full_text: string }[] = [];
 
         for (const r of chunkResults ?? []) {
             const rawText = r.chunk_text ?? "";
@@ -319,6 +253,7 @@ export async function POST(req: Request) {
             if (fullText.length < 60 || previewText.length < 40) continue;
 
             candidates.push({
+                chunk_id: r.chunk_id ?? "",
                 book_id: r.book_id,
                 book_title: bookTitleMap.get(r.book_id) ?? "Unknown",
                 score: typeof r.similarity === "number" ? r.similarity : null,
@@ -353,6 +288,7 @@ export async function POST(req: Request) {
 
         const storedPassages = diverse.slice(0, 3).map((p: any) => ({
             id: crypto.randomUUID(),
+            chunk_id: p.chunk_id,
             book_id: p.book_id, book_title: p.book_title,
             score: p.score ?? null, text: p.text, full_text: p.full_text,
         }));

@@ -8,7 +8,7 @@ import { useLocale } from "@/lib/i18n";
 
 type Book = { id: string; title: string; created_at: string; topic_ids?: string[] };
 type Topic = { id: string; name: string; display_order: number };
-type Passage = { id: string; book_id: string; book_title: string; score: number | null; text: string };
+type Passage = { id: string; chunk_id?: string; book_id: string; book_title: string; score: number | null; text: string };
 
 type Msg =
     | { role: "user"; text: string }
@@ -36,6 +36,13 @@ export default function AskPage() {
     const [userId, setUserId] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [loadingFullId, setLoadingFullId] = useState<string | null>(null);
+    const [expandState, setExpandState] = useState<Record<string, {
+        before: string[]; after: string[];
+        beforeChunkId: string | null; afterChunkId: string | null;
+        hasMoreBefore: boolean; hasMoreAfter: boolean;
+        loadingDir: "before" | "after" | null;
+    }>>({});
+    const [feedbackState, setFeedbackState] = useState<Record<string, "positive" | "negative" | null>>({});
 
     const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
         "What did the desert fathers say about humility?",
@@ -249,6 +256,52 @@ export default function AskPage() {
 
         if (!res.ok) return null;
         return (json?.text ?? null) as string | null;
+    }
+
+    async function expandPassage(passageId: string, chunkId: string, direction: "before" | "after") {
+        const token = await getToken();
+        if (!token) return;
+
+        const state = expandState[passageId] ?? {
+            before: [], after: [],
+            beforeChunkId: chunkId, afterChunkId: chunkId,
+            hasMoreBefore: true, hasMoreAfter: true, loadingDir: null,
+        };
+
+        const sourceChunkId = direction === "before" ? (state.beforeChunkId ?? chunkId) : (state.afterChunkId ?? chunkId);
+
+        setExpandState((prev) => ({ ...prev, [passageId]: { ...state, loadingDir: direction } }));
+
+        try {
+            const res = await fetch("/api/passages/expand", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ chunk_id: sourceChunkId, direction }),
+            });
+            const json = await res.json().catch(() => null);
+            if (!json?.text) {
+                setExpandState((prev) => ({
+                    ...prev,
+                    [passageId]: {
+                        ...state, loadingDir: null,
+                        ...(direction === "before" ? { hasMoreBefore: false } : { hasMoreAfter: false }),
+                    },
+                }));
+                return;
+            }
+            setExpandState((prev) => ({
+                ...prev,
+                [passageId]: {
+                    ...state,
+                    loadingDir: null,
+                    ...(direction === "before"
+                        ? { before: [json.text, ...state.before], beforeChunkId: json.nextChunkId, hasMoreBefore: json.hasMore }
+                        : { after: [...state.after, json.text], afterChunkId: json.nextChunkId, hasMoreAfter: json.hasMore }),
+                },
+            }));
+        } catch {
+            setExpandState((prev) => ({ ...prev, [passageId]: { ...state, loadingDir: null } }));
+        }
     }
 
     async function ask() {
@@ -651,86 +704,150 @@ export default function AskPage() {
                                             <div style={{ fontSize: 13, opacity: 0.75 }}>{tr("askNoPassages")}</div>
                                         ) : (
                                             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                                {m.passages.map((p, i) => (
+                                                {m.passages.map((p, i) => {
+                                                    const es = expandState[p.id];
+                                                    const canExpandBefore = p.chunk_id && (!es || (es.before.length < 3 && es.hasMoreBefore !== false));
+                                                    const canExpandAfter = p.chunk_id && (!es || (es.after.length < 3 && es.hasMoreAfter !== false));
+                                                    const isLoadingBefore = es?.loadingDir === "before";
+                                                    const isLoadingAfter = es?.loadingDir === "after";
+                                                    const fb = feedbackState[p.id] ?? null;
+                                                    const isCopied = copiedId === p.id;
+
+                                                    const iconBtn = (onClick: () => void, disabled?: boolean): React.CSSProperties => ({
+                                                        background: "none", border: "none", padding: 4, cursor: disabled ? "default" : "pointer",
+                                                        color: tc(isDark).fgMuted, opacity: disabled ? 0.4 : 1, display: "inline-flex", alignItems: "center",
+                                                    });
+
+                                                    return (
                                                     <div key={p.id} style={{ marginTop: 16 }}>
                                                         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
                                                             {i + 1}. {p.book_title}
                                                         </div>
 
-                                                        <div style={{ border: `1px solid ${t.border}`, borderRadius: 16, padding: 16 }}>
-                                                            <div
-                                                                style={{
+                                                        <div style={{ border: `1px solid ${t.border}`, borderRadius: 16, padding: "12px 16px" }}>
+                                                            {/* Expand before button */}
+                                                            {canExpandBefore && (
+                                                                <div style={{ marginBottom: 6 }}>
+                                                                    <button
+                                                                        style={iconBtn(() => {}, isLoadingBefore)}
+                                                                        disabled={isLoadingBefore}
+                                                                        onClick={() => expandPassage(p.id, p.chunk_id!, "before")}
+                                                                        aria-label="Expand before"
+                                                                    >
+                                                                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                                                            <line x1="9" y1="4" x2="9" y2="14" /><line x1="4" y1="9" x2="14" y2="9" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Expanded before text */}
+                                                            {es?.before.map((txt, bi) => (
+                                                                <div key={`eb-${bi}`} style={{
                                                                     fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-                                                                    fontSize: 16,
-                                                                    lineHeight: 1.6,
-                                                                    whiteSpace: "pre-wrap",
-                                                                    color: t.fg,
-                                                                }}
-                                                            >
+                                                                    fontSize: 16, lineHeight: 1.6, whiteSpace: "pre-wrap",
+                                                                    color: tc(isDark).fgMuted, marginBottom: 8,
+                                                                    borderBottom: `1px dashed ${t.border}`, paddingBottom: 8,
+                                                                }}>{txt}</div>
+                                                            ))}
+
+                                                            {/* Main passage text */}
+                                                            <div style={{
+                                                                fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+                                                                fontSize: 16, lineHeight: 1.6, whiteSpace: "pre-wrap", color: t.fg,
+                                                            }}>
                                                                 {p.text}
                                                             </div>
 
-                                                            <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-                                                                {(() => {
-                                                                    const trimmed = (p.text ?? "").trimEnd();
-                                                                    return trimmed.endsWith("…") || trimmed.endsWith("...");
-                                                                })() && (
-                                                                        <button
-                                                                            disabled={loadingFullId === p.id}
-                                                                            onClick={async () => {
-                                                                                setLoadingFullId(p.id);
-                                                                                const full = await fetchFullSaying(p.id);
-                                                                                setLoadingFullId(null);
-                                                                                if (!full) return;
-                                                                                setChat((prev) =>
-                                                                                    prev.map((msg) => {
-                                                                                        if (msg.role !== "assistant") return msg;
-                                                                                        return {
-                                                                                            ...msg,
-                                                                                            passages: msg.passages.map((pp) =>
-                                                                                                pp.id === p.id ? { ...pp, text: full } : pp
-                                                                                            ),
-                                                                                        };
-                                                                                    })
-                                                                                );
-                                                                            }}
-                                                                            style={{
-                                                                                fontSize: 12,
-                                                                                padding: "6px 10px",
-                                                                                border: `1px solid ${t.borderInput}`,
-                                                                                borderRadius: 12,
-                                                                                background: "transparent",
-                                                                                color: t.fg,
-                                                                                cursor: loadingFullId === p.id ? "default" : "pointer",
-                                                                                opacity: loadingFullId === p.id ? 0.6 : 1,
-                                                                            }}
-                                                                        >
-                                                                            {loadingFullId === p.id ? tr("askLoadingFull") : tr("askShowFull")}
-                                                                        </button>
-                                                                    )}
+                                                            {/* Expanded after text */}
+                                                            {es?.after.map((txt, ai) => (
+                                                                <div key={`ea-${ai}`} style={{
+                                                                    fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+                                                                    fontSize: 16, lineHeight: 1.6, whiteSpace: "pre-wrap",
+                                                                    color: tc(isDark).fgMuted, marginTop: 8,
+                                                                    borderTop: `1px dashed ${t.border}`, paddingTop: 8,
+                                                                }}>{txt}</div>
+                                                            ))}
 
+                                                            {/* Bottom action row: expand after, feedback, copy */}
+                                                            <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                                                                {/* Expand after */}
+                                                                {canExpandAfter && (
+                                                                    <button
+                                                                        style={iconBtn(() => {}, isLoadingAfter)}
+                                                                        disabled={isLoadingAfter}
+                                                                        onClick={() => expandPassage(p.id, p.chunk_id!, "after")}
+                                                                        aria-label="Expand after"
+                                                                    >
+                                                                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                                                            <line x1="9" y1="4" x2="9" y2="14" /><line x1="4" y1="9" x2="14" y2="9" />
+                                                                        </svg>
+                                                                    </button>
+                                                                )}
+
+                                                                {/* Spacer */}
+                                                                <div style={{ flex: 1 }} />
+
+                                                                {/* Feedback: smiley */}
                                                                 <button
+                                                                    style={{ ...iconBtn(() => {}), color: fb === "positive" ? tc(isDark).copyActiveFg : tc(isDark).fgMuted }}
+                                                                    onClick={() => setFeedbackState((prev) => ({ ...prev, [p.id]: fb === "positive" ? null : "positive" }))}
+                                                                    aria-label="Good answer"
+                                                                >
+                                                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                                                        <circle cx="10" cy="10" r="8.5" stroke="currentColor" strokeWidth="1.5" />
+                                                                        <circle cx="7.5" cy="8" r="1" fill="currentColor" />
+                                                                        <circle cx="12.5" cy="8" r="1" fill="currentColor" />
+                                                                        <path d="M6.5 12.5 Q10 15.5 13.5 12.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                                                                    </svg>
+                                                                </button>
+
+                                                                {/* Feedback: confused */}
+                                                                <button
+                                                                    style={{ ...iconBtn(() => {}), color: fb === "negative" ? "#e67e22" : tc(isDark).fgMuted }}
+                                                                    onClick={() => setFeedbackState((prev) => ({ ...prev, [p.id]: fb === "negative" ? null : "negative" }))}
+                                                                    aria-label="Confusing answer"
+                                                                >
+                                                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                                                        <circle cx="10" cy="10" r="8.5" stroke="currentColor" strokeWidth="1.5" />
+                                                                        <circle cx="7.5" cy="8" r="1" fill="currentColor" />
+                                                                        <circle cx="12.5" cy="8" r="1" fill="currentColor" />
+                                                                        <path d="M6.5 14 Q10 11 13.5 14" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                                                                    </svg>
+                                                                </button>
+
+                                                                {/* Copy */}
+                                                                <button
+                                                                    style={{ ...iconBtn(() => {}), color: isCopied ? tc(isDark).copyActiveFg : tc(isDark).fgMuted }}
                                                                     onClick={() => {
-                                                                        navigator.clipboard.writeText(p.text);
+                                                                        const allText = [
+                                                                            ...(es?.before ?? []),
+                                                                            p.text,
+                                                                            ...(es?.after ?? []),
+                                                                        ].join("\n\n");
+                                                                        navigator.clipboard.writeText(allText);
                                                                         setCopiedId(p.id);
                                                                         setTimeout(() => setCopiedId(null), 2000);
                                                                     }}
-                                                                    style={{
-                                                                        fontSize: 12,
-                                                                        padding: "6px 10px",
-                                                                        border: `1px solid ${t.borderInput}`,
-                                                                        borderRadius: 12,
-                                                                        background: copiedId === p.id ? t.copyActiveBg : "transparent",
-                                                                        cursor: "pointer",
-                                                                        color: copiedId === p.id ? t.copyActiveFg : t.fg,
-                                                                    }}
+                                                                    aria-label="Copy"
                                                                 >
-                                                                    {copiedId === p.id ? tr("askCopied") : tr("askCopy")}
+                                                                    {isCopied ? (
+                                                                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                                                                            <rect x="3" y="5" width="10" height="11" rx="1.5" fill="currentColor" stroke="currentColor" strokeWidth="1.2" />
+                                                                            <polyline points="5.5 10.5 7.5 12.5 10.5 8.5" fill="none" stroke={isDark ? "#111" : "#fff"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                                                        </svg>
+                                                                    ) : (
+                                                                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                                                            <rect x="5.5" y="2.5" width="9" height="11" rx="1.5" />
+                                                                            <rect x="3.5" y="4.5" width="9" height="11" rx="1.5" />
+                                                                        </svg>
+                                                                    )}
                                                                 </button>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </div>
