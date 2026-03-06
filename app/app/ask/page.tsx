@@ -199,6 +199,8 @@ export default function AskPage() {
         setLoadingThread(true);
         setConversationId(id);
         setChat([]);
+        setExpandState({});
+        setFeedbackState({});
         const result = await fetchMessages(id);
         if (result) {
             setChat(result.messages);
@@ -211,6 +213,8 @@ export default function AskPage() {
         setConversationId(null);
         setConversationTitle(null);
         setChat([]);
+        setExpandState({});
+        setFeedbackState({});
         setQuestion("");
         fetchSuggestedQuestions();
     }
@@ -713,9 +717,10 @@ export default function AskPage() {
                                                     const fb = feedbackState[p.id] ?? null;
                                                     const isCopied = copiedId === p.id;
 
-                                                    const iconBtn = (onClick: () => void, disabled?: boolean): React.CSSProperties => ({
-                                                        background: "none", border: "none", padding: 4, cursor: disabled ? "default" : "pointer",
+                                                    const iconBtn = (disabled?: boolean): React.CSSProperties => ({
+                                                        background: "none", border: "none", padding: 8, cursor: disabled ? "default" : "pointer",
                                                         color: tc(isDark).fgMuted, opacity: disabled ? 0.4 : 1, display: "inline-flex", alignItems: "center",
+                                                        borderRadius: 6, transition: "opacity 0.15s",
                                                     });
 
                                                     return (
@@ -729,7 +734,8 @@ export default function AskPage() {
                                                             {canExpandBefore && (
                                                                 <div style={{ marginBottom: 6 }}>
                                                                     <button
-                                                                        style={iconBtn(() => {}, isLoadingBefore)}
+                                                                        className="icon-btn"
+                                                                        style={iconBtn(isLoadingBefore)}
                                                                         disabled={isLoadingBefore}
                                                                         onClick={() => expandPassage(p.id, p.chunk_id!, "before")}
                                                                         aria-label="Expand before"
@@ -774,7 +780,8 @@ export default function AskPage() {
                                                                 {/* Expand after */}
                                                                 {canExpandAfter && (
                                                                     <button
-                                                                        style={iconBtn(() => {}, isLoadingAfter)}
+                                                                        className="icon-btn"
+                                                                        style={iconBtn(isLoadingAfter)}
                                                                         disabled={isLoadingAfter}
                                                                         onClick={() => expandPassage(p.id, p.chunk_id!, "after")}
                                                                         aria-label="Expand after"
@@ -790,7 +797,8 @@ export default function AskPage() {
 
                                                                 {/* Feedback: smiley */}
                                                                 <button
-                                                                    style={{ ...iconBtn(() => {}), color: fb === "positive" ? tc(isDark).copyActiveFg : tc(isDark).fgMuted }}
+                                                                    className="icon-btn"
+                                                                    style={{ ...iconBtn(), color: fb === "positive" ? tc(isDark).copyActiveFg : tc(isDark).fgMuted }}
                                                                     onClick={() => setFeedbackState((prev) => ({ ...prev, [p.id]: fb === "positive" ? null : "positive" }))}
                                                                     aria-label="Good answer"
                                                                 >
@@ -804,7 +812,8 @@ export default function AskPage() {
 
                                                                 {/* Feedback: confused */}
                                                                 <button
-                                                                    style={{ ...iconBtn(() => {}), color: fb === "negative" ? "#e67e22" : tc(isDark).fgMuted }}
+                                                                    className="icon-btn"
+                                                                    style={{ ...iconBtn(), color: fb === "negative" ? "#e67e22" : tc(isDark).fgMuted }}
                                                                     onClick={() => setFeedbackState((prev) => ({ ...prev, [p.id]: fb === "negative" ? null : "negative" }))}
                                                                     aria-label="Confusing answer"
                                                                 >
@@ -818,7 +827,8 @@ export default function AskPage() {
 
                                                                 {/* Copy */}
                                                                 <button
-                                                                    style={{ ...iconBtn(() => {}), color: isCopied ? tc(isDark).copyActiveFg : tc(isDark).fgMuted }}
+                                                                    className="icon-btn"
+                                                                    style={{ ...iconBtn(), color: isCopied ? tc(isDark).copyActiveFg : tc(isDark).fgMuted }}
                                                                     onClick={() => {
                                                                         const allText = [
                                                                             ...(es?.before ?? []),
@@ -834,7 +844,7 @@ export default function AskPage() {
                                                                     {isCopied ? (
                                                                         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                                                                             <rect x="3" y="5" width="10" height="11" rx="1.5" fill="currentColor" stroke="currentColor" strokeWidth="1.2" />
-                                                                            <polyline points="5.5 10.5 7.5 12.5 10.5 8.5" fill="none" stroke={isDark ? "#111" : "#fff"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                                                            <polyline points="5.5 10.5 7.5 12.5 10.5 8.5" fill="none" stroke={t.cardBg} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                                                                         </svg>
                                                                     ) : (
                                                                         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5">
