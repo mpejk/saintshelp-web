@@ -97,6 +97,31 @@ Only books with `indexing_status = 'ready'` are searched.
 
 `full_text` is only returned via `POST /api/passages/full` when the user clicks "Show full saying".
 
+Passages also include `chunk_id` (from `book_chunks.id`), used by the full-book reader and context expansion features.
+
+**Conversational context**: the ask route fetches the last 3 user questions from the conversation, extracts topic keywords (stripping stop words), and builds the search query as `"Context: <terms>. <question> <question>"` — the current question is repeated for 2x weight.
+
+### Full-Book Reader
+
+`GET /api/books/[id]/reader` — returns all chunks for a book, cleaned through the text pipeline, ordered by `chunk_index`. The frontend renders a full-screen overlay where the user can scroll through the entire book text. The matched passage is highlighted with bold font and subtle background.
+
+### Passage Context Expansion
+
+`POST /api/passages/expand` — takes `{ chunk_id, direction: "before" | "after" }`, returns the adjacent chunk's cleaned text plus `hasMore` and `nextChunkId`.
+
+### Text Cleaning Pipeline
+
+`lib/textClean.ts` — shared utilities used by ask, reader, and expand routes:
+- `sanitizeText` — Unicode normalization, PDF ligature replacement (fi, fl, ff, ffi, ffl), control char removal
+- `dewrapPdfLines` — unwrap PDF line breaks, join hyphenated words, strip inline references
+- `stripPageMarkers`, `stripAuthorTitleLines`, `stripFootnoteLines`, `stripHeaderLines`, `stripInlineHeaders`, `stripLikelyHeaderFooterLines` — remove PDF artifacts
+- `trimLeadingFragment`, `trimTrailingFragment` — snap to sentence boundaries
+- `cleanChunkText` — runs the full pipeline
+
+### Health Check
+
+`GET /api/health` — checks Voyage AI and Supabase connectivity. Returns `{ voyage: "ok"|error, supabase: "ok"|error }` with 200 or 503.
+
 ### Conversation Persistence (DB-backed)
 
 Conversations sync across devices via Supabase:
@@ -123,7 +148,7 @@ requests             id, user_id, kind (quota tracking)
 
 SQL function `search_chunks(query_embedding, book_ids, match_count, similarity_threshold)` performs the pgvector similarity search.
 
-`answer_passages` is JSONB: `{ passages: [{ id, book_id, book_title, score, text, full_text }] }`. The `full_text` stored server-side is used by `/api/passages/full`; clients only see `text` (truncated preview).
+`answer_passages` is JSONB: `{ passages: [{ id, chunk_id, book_id, book_title, score, text, full_text }] }`. The `full_text` stored server-side is used by `/api/passages/full`; clients only see `text` (truncated preview). `chunk_id` enables the full-book reader.
 
 ### Topics & Book Browsing
 
@@ -143,6 +168,12 @@ The ask page sidebar shows a compact summary ("Selected: 12/87 books") with a "M
 All authenticated app pages live under `app/app/` with a shared layout. Pages are pure client components — no server components with data fetching. Auth token is retrieved from Supabase client session before each API call and passed as `Authorization: Bearer <token>`.
 
 No Tailwind is used in components — all styles are inline `React.CSSProperties` objects defined at the top of each component, computed from the `tc(isDark)` theme palette.
+
+**Passage cards** use icon-based controls (inline SVGs, no text labels):
+- Expand icon (diagonal arrows) — opens full-book reader overlay
+- Feedback icons (smiley/sad face) — local toggle state, no persistence
+- Copy icon (clipboard) — copies passage text, briefly shows checkmark
+- All icons use the `.icon-btn` CSS class for hover states
 
 ### Light / Dark Theme
 
@@ -169,4 +200,4 @@ CSS dark mode overrides for class-based sticky elements (`.app-topbar`, `.ask-in
 
 - Supabase keys use the new `sb_secret_` / `sb_publishable_` format — these are **not** JWTs and do not work as PostgreSQL passwords or with the Supabase Management API (which requires a Personal Access Token starting with `sbp_`). DDL must be run in the Supabase dashboard SQL editor.
 - `next.config.ts` sets `generateBuildId: async () => \`build-\${Date.now()}\`` to force unique static asset paths on each deploy, preventing CDN stale-chunk issues.
-- Mobile scroll uses `overflow-x: clip` (not `hidden`) on `html, body` — `overflow-x: hidden` implicitly creates a scroll container which breaks `position: sticky` and `window.scrollTo`.
+- Desktop uses `overflow-x: hidden` on `html, body`. Mobile (≤700px) uses `overflow-x: clip` instead — `overflow-x: hidden` implicitly creates a scroll container which breaks `position: sticky` and `window.scrollTo` on mobile.

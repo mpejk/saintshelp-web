@@ -36,13 +36,14 @@ export default function AskPage() {
     const [userId, setUserId] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [loadingFullId, setLoadingFullId] = useState<string | null>(null);
-    const [expandState, setExpandState] = useState<Record<string, {
-        before: string[]; after: string[];
-        beforeChunkId: string | null; afterChunkId: string | null;
-        hasMoreBefore: boolean; hasMoreAfter: boolean;
-        loadingDir: "before" | "after" | null;
-    }>>({});
     const [feedbackState, setFeedbackState] = useState<Record<string, "positive" | "negative" | null>>({});
+    const [reader, setReader] = useState<{
+        bookTitle: string;
+        sections: { chunkId: string; chunkIndex: number; text: string }[];
+        highlightChunkId: string;
+    } | null>(null);
+    const [readerLoading, setReaderLoading] = useState<string | null>(null);
+    const readerHighlightRef = useRef<HTMLDivElement>(null);
 
     const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([
         "What did the desert fathers say about humility?",
@@ -199,7 +200,6 @@ export default function AskPage() {
         setLoadingThread(true);
         setConversationId(id);
         setChat([]);
-        setExpandState({});
         setFeedbackState({});
         const result = await fetchMessages(id);
         if (result) {
@@ -213,7 +213,6 @@ export default function AskPage() {
         setConversationId(null);
         setConversationTitle(null);
         setChat([]);
-        setExpandState({});
         setFeedbackState({});
         setQuestion("");
         fetchSuggestedQuestions();
@@ -262,50 +261,19 @@ export default function AskPage() {
         return (json?.text ?? null) as string | null;
     }
 
-    async function expandPassage(passageId: string, chunkId: string, direction: "before" | "after") {
+    async function openReader(bookId: string, chunkId: string) {
         const token = await getToken();
         if (!token) return;
-
-        const state = expandState[passageId] ?? {
-            before: [], after: [],
-            beforeChunkId: chunkId, afterChunkId: chunkId,
-            hasMoreBefore: true, hasMoreAfter: true, loadingDir: null,
-        };
-
-        const sourceChunkId = direction === "before" ? (state.beforeChunkId ?? chunkId) : (state.afterChunkId ?? chunkId);
-
-        setExpandState((prev) => ({ ...prev, [passageId]: { ...state, loadingDir: direction } }));
-
+        setReaderLoading(chunkId);
         try {
-            const res = await fetch("/api/passages/expand", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ chunk_id: sourceChunkId, direction }),
+            const res = await fetch(`/api/books/${bookId}/reader`, {
+                headers: { Authorization: `Bearer ${token}` },
             });
-            const json = await res.json().catch(() => null);
-            if (!json?.text) {
-                setExpandState((prev) => ({
-                    ...prev,
-                    [passageId]: {
-                        ...state, loadingDir: null,
-                        ...(direction === "before" ? { hasMoreBefore: false } : { hasMoreAfter: false }),
-                    },
-                }));
-                return;
-            }
-            setExpandState((prev) => ({
-                ...prev,
-                [passageId]: {
-                    ...state,
-                    loadingDir: null,
-                    ...(direction === "before"
-                        ? { before: [json.text, ...state.before], beforeChunkId: json.nextChunkId, hasMoreBefore: json.hasMore }
-                        : { after: [...state.after, json.text], afterChunkId: json.nextChunkId, hasMoreAfter: json.hasMore }),
-                },
-            }));
-        } catch {
-            setExpandState((prev) => ({ ...prev, [passageId]: { ...state, loadingDir: null } }));
-        }
+            if (!res.ok) { setReaderLoading(null); return; }
+            const json = await res.json();
+            setReader({ bookTitle: json.title, sections: json.sections, highlightChunkId: chunkId });
+        } catch { /* ignore */ }
+        setReaderLoading(null);
     }
 
     async function ask() {
@@ -453,6 +421,14 @@ export default function AskPage() {
         });
     }, [chat]);
 
+    // Scroll reader to highlighted chunk when it opens
+    useEffect(() => {
+        if (!reader) return;
+        requestAnimationFrame(() => {
+            readerHighlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+    }, [reader]);
+
     const { isDark } = useTheme();
     const t = tc(isDark);
 
@@ -505,6 +481,7 @@ export default function AskPage() {
     };
 
     return (
+        <>
         <div className="ask-wrap">
             <div className="ask-layout">
                 <aside className="ask-aside" style={{ ...styles.card, ...styles.aside }}>
@@ -709,13 +686,9 @@ export default function AskPage() {
                                         ) : (
                                             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                                                 {m.passages.map((p, i) => {
-                                                    const es = expandState[p.id];
-                                                    const canExpandBefore = p.chunk_id && (!es || (es.before.length < 3 && es.hasMoreBefore !== false));
-                                                    const canExpandAfter = p.chunk_id && (!es || (es.after.length < 3 && es.hasMoreAfter !== false));
-                                                    const isLoadingBefore = es?.loadingDir === "before";
-                                                    const isLoadingAfter = es?.loadingDir === "after";
                                                     const fb = feedbackState[p.id] ?? null;
                                                     const isCopied = copiedId === p.id;
+                                                    const isReaderLoading = readerLoading === p.chunk_id;
 
                                                     const iconBtn = (disabled?: boolean): React.CSSProperties => ({
                                                         background: "none", border: "none", padding: 8, cursor: disabled ? "default" : "pointer",
@@ -729,73 +702,38 @@ export default function AskPage() {
                                                             {i + 1}. {p.book_title}
                                                         </div>
 
-                                                        <div style={{ border: `1px solid ${t.border}`, borderRadius: 16, padding: "12px 16px" }}>
-                                                            {/* Expand before button */}
-                                                            {canExpandBefore && (
-                                                                <div style={{ marginBottom: 6 }}>
-                                                                    <button
-                                                                        className="icon-btn"
-                                                                        style={iconBtn(isLoadingBefore)}
-                                                                        disabled={isLoadingBefore}
-                                                                        onClick={() => expandPassage(p.id, p.chunk_id!, "before")}
-                                                                        aria-label="Expand before"
-                                                                    >
-                                                                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                                                            <line x1="9" y1="4" x2="9" y2="14" /><line x1="4" y1="9" x2="14" y2="9" />
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Expanded before text */}
-                                                            {es?.before.map((txt, bi) => (
-                                                                <div key={`eb-${bi}`} style={{
-                                                                    fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-                                                                    fontSize: 16, lineHeight: 1.6, whiteSpace: "pre-wrap",
-                                                                    color: tc(isDark).fgMuted, marginBottom: 8,
-                                                                    borderBottom: `1px dashed ${t.border}`, paddingBottom: 8,
-                                                                }}>{txt}</div>
-                                                            ))}
-
-                                                            {/* Main passage text */}
+                                                        <div style={{ border: `1px solid ${t.border}`, borderRadius: 16, padding: "14px 18px" }}>
                                                             <div style={{
                                                                 fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-                                                                fontSize: 16, lineHeight: 1.6, whiteSpace: "pre-wrap", color: t.fg,
+                                                                fontSize: 17, lineHeight: 1.65, whiteSpace: "pre-wrap", color: t.fg,
                                                             }}>
                                                                 {p.text}
                                                             </div>
 
-                                                            {/* Expanded after text */}
-                                                            {es?.after.map((txt, ai) => (
-                                                                <div key={`ea-${ai}`} style={{
-                                                                    fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-                                                                    fontSize: 16, lineHeight: 1.6, whiteSpace: "pre-wrap",
-                                                                    color: tc(isDark).fgMuted, marginTop: 8,
-                                                                    borderTop: `1px dashed ${t.border}`, paddingTop: 8,
-                                                                }}>{txt}</div>
-                                                            ))}
-
-                                                            {/* Bottom action row: expand after, feedback, copy */}
-                                                            <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                                                                {/* Expand after */}
-                                                                {canExpandAfter && (
+                                                            {/* Action row: open reader, feedback, copy */}
+                                                            <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                                                                {/* Open in full reader */}
+                                                                {p.chunk_id && (
                                                                     <button
                                                                         className="icon-btn"
-                                                                        style={iconBtn(isLoadingAfter)}
-                                                                        disabled={isLoadingAfter}
-                                                                        onClick={() => expandPassage(p.id, p.chunk_id!, "after")}
-                                                                        aria-label="Expand after"
+                                                                        style={iconBtn(isReaderLoading)}
+                                                                        disabled={isReaderLoading}
+                                                                        onClick={() => openReader(p.book_id, p.chunk_id!)}
+                                                                        aria-label="Read in context"
                                                                     >
-                                                                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                                                            <line x1="9" y1="4" x2="9" y2="14" /><line x1="4" y1="9" x2="14" y2="9" />
+                                                                        {/* Expand/maximize icon */}
+                                                                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <polyline points="11 2 16 2 16 7" />
+                                                                            <polyline points="7 16 2 16 2 11" />
+                                                                            <line x1="16" y1="2" x2="10.5" y2="7.5" />
+                                                                            <line x1="2" y1="16" x2="7.5" y2="10.5" />
                                                                         </svg>
                                                                     </button>
                                                                 )}
 
-                                                                {/* Spacer */}
                                                                 <div style={{ flex: 1 }} />
 
-                                                                {/* Feedback: smiley */}
+                                                                {/* Feedback: good */}
                                                                 <button
                                                                     className="icon-btn"
                                                                     style={{ ...iconBtn(), color: fb === "positive" ? tc(isDark).copyActiveFg : tc(isDark).fgMuted }}
@@ -830,12 +768,7 @@ export default function AskPage() {
                                                                     className="icon-btn"
                                                                     style={{ ...iconBtn(), color: isCopied ? tc(isDark).copyActiveFg : tc(isDark).fgMuted }}
                                                                     onClick={() => {
-                                                                        const allText = [
-                                                                            ...(es?.before ?? []),
-                                                                            p.text,
-                                                                            ...(es?.after ?? []),
-                                                                        ].join("\n\n");
-                                                                        navigator.clipboard.writeText(allText);
+                                                                        navigator.clipboard.writeText(p.text);
                                                                         setCopiedId(p.id);
                                                                         setTimeout(() => setCopiedId(null), 2000);
                                                                     }}
@@ -890,5 +823,64 @@ export default function AskPage() {
                 </section>
             </div>
         </div>
+
+        {/* Full-book reader overlay */}
+        {reader && (
+            <div style={{
+                position: "fixed", inset: 0, zIndex: 1000,
+                background: t.pageBg, display: "flex", flexDirection: "column",
+            }}>
+                {/* Reader header */}
+                <div style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    padding: "12px 20px", borderBottom: `1px solid ${t.border}`,
+                    flexShrink: 0,
+                }}>
+                    <button
+                        className="icon-btn"
+                        onClick={() => setReader(null)}
+                        style={{
+                            background: "none", border: "none", padding: 8, cursor: "pointer",
+                            color: t.fg, display: "inline-flex", alignItems: "center", borderRadius: 6,
+                        }}
+                        aria-label="Close reader"
+                    >
+                        {/* X close icon */}
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                            <line x1="4" y1="4" x2="16" y2="16" /><line x1="16" y1="4" x2="4" y2="16" />
+                        </svg>
+                    </button>
+                    <span style={{ fontSize: 16, fontWeight: 600, color: t.fg }}>{reader.bookTitle}</span>
+                </div>
+
+                {/* Reader body */}
+                <div style={{
+                    flex: 1, overflowY: "auto", padding: "24px 20px",
+                    maxWidth: 720, margin: "0 auto", width: "100%", boxSizing: "border-box",
+                }}>
+                    {reader.sections.map((sec) => {
+                        const isHighlight = sec.chunkId === reader.highlightChunkId;
+                        return (
+                            <div
+                                key={sec.chunkId}
+                                ref={isHighlight ? readerHighlightRef : undefined}
+                                style={{
+                                    fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+                                    fontSize: 17, lineHeight: 1.7, color: t.fg,
+                                    fontWeight: isHighlight ? 600 : 400,
+                                    background: isHighlight ? (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)") : "transparent",
+                                    borderRadius: isHighlight ? 8 : 0,
+                                    padding: isHighlight ? "12px 16px" : "0 16px",
+                                    marginBottom: 4,
+                                }}
+                            >
+                                {sec.text}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        )}
+        </>
     );
 }
